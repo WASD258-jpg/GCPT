@@ -1,0 +1,16 @@
+build/
+dist/
+*.keystore
+*.jks
+release-keystore-password.txt
+local.properties
+.gradle/
+.idea/
+*.iml
+*.apk
+*.aab
+*.log
+out/
+.DS_Store
+Thumbs.db
+*.tmp
