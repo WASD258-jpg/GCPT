@@ -30,7 +30,13 @@
 
 ## 界面
 
-> 早期界面预览图曾包含真实课表信息，已从仓库移除；当前仓库不附带截图。设计方向为 demo C「晨雾毛玻璃」，实际应用为原生实现。
+> 以下为 MuMu 模拟器竖屏截图，课程、教师、教室、余额均为虚构示例，不含真实个人信息。
+
+| 首页 | 课表 |
+| :---: | :---: |
+| ![首页](docs/screenshots/home.png) | ![课表](docs/screenshots/schedule.png) |
+| **设置** |  |
+| ![设置](docs/screenshots/settings.png) |  |
 
 ## 功能
 
@@ -104,13 +110,6 @@ AndroidManifest.xml   清单（仅 INTERNET，allowBackup=false）
 ## 许可证
 
 本项目以 [GNU General Public License v3.0](LICENSE) 开源，另见 [NOTICE](NOTICE)。你可以自由使用、修改和分发，但衍生作品需继续以 GPL-3.0 开源，且不提供担保。
-
-## 致谢
-
-- 界面方向与设计稿：demo C「晨雾毛玻璃」。
-- README 结构参考：[AstrBot](https://github.com/AstrBotDevs/AstrBot)。
-- 学校门户、教务、学工、图书馆等系统由其各自团队维护。
-- 所有为本项目提供反馈、测试和审计的同学。
 
 <div align="center">
   <a href="https://star-history.com/#WASD258-jpg/guangcheng-tong&Date">
