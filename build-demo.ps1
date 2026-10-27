@@ -10,16 +10,16 @@ Set-Location $PSScriptRoot
 function Check-Exit { if ($LASTEXITCODE -ne 0) { throw "Build command failed: $LASTEXITCODE" } }
 New-Item -ItemType Directory -Force 'build\classes','build\dex','dist' | Out-Null
 $sources = @(
-    'src/cn/gct/demo/Ui.java',
-'src/cn/gct/demo/LineIconView.java',
-    'src/cn/gct/demo/TermCalendar.java',
-    'src/cn/gct/demo/CourseData.java',
-    'src/cn/gct/demo/HoursData.java',
-    'src/cn/gct/demo/PeriodTimes.java',
-    'src/cn/gct/demo/CourseParser.java',
-    'src/cn/gct/demo/WeekGrid.java',
-    'src/cn/gct/demo/CourseDetailDialog.java',
-    'src/cn/gct/demo/MainActivity.java'
+    'src/cn/gcpt/app/Ui.java',
+'src/cn/gcpt/app/LineIconView.java',
+    'src/cn/gcpt/app/TermCalendar.java',
+    'src/cn/gcpt/app/CourseData.java',
+    'src/cn/gcpt/app/HoursData.java',
+    'src/cn/gcpt/app/PeriodTimes.java',
+    'src/cn/gcpt/app/CourseParser.java',
+    'src/cn/gcpt/app/WeekGrid.java',
+    'src/cn/gcpt/app/CourseDetailDialog.java',
+    'src/cn/gcpt/app/MainActivity.java'
 )
 & "$env:JAVA_HOME\bin\javac.exe" -encoding UTF-8 -source 8 -target 8 -bootclasspath "$platform;$tools\core-lambda-stubs.jar" -d build/classes @sources
 Check-Exit
@@ -40,8 +40,8 @@ if (-not (Test-Path build/release.keystore)) {
     & "$env:JAVA_HOME\bin\keytool.exe" -genkeypair -keystore build/release.keystore -storepass $ksPass -keypass $ksPass -alias guangchengtong -dname 'CN=Guangcheng Tong,O=Guangcheng Tong,C=CN' -keyalg RSA -keysize 4096 -validity 10000
     Check-Exit
 }
-& "$tools\apksigner.bat" sign --ks build/release.keystore --ks-key-alias guangchengtong --ks-pass "pass:$ksPass" --key-pass "pass:$ksPass" --out dist/guangcheng-1.0.1.apk build/aligned.apk
+& "$tools\apksigner.bat" sign --ks build/release.keystore --ks-key-alias guangchengtong --ks-pass "pass:$ksPass" --key-pass "pass:$ksPass" --out dist/gcpt-1.0.2.apk build/aligned.apk
 Check-Exit
-& "$tools\apksigner.bat" verify --verbose dist/guangcheng-1.0.1.apk
+& "$tools\apksigner.bat" verify --verbose dist/gcpt-1.0.2.apk
 Check-Exit
-Write-Output 'APK ready: dist/guangcheng-1.0.1.apk'
+Write-Output 'APK ready: dist/gcpt-1.0.2.apk'

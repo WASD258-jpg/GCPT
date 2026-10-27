@@ -1,4 +1,4 @@
-package cn.gct.demo;
+package cn.gcpt.app;
 
 import android.app.Dialog;
 import android.content.ClipData;

@@ -1,4 +1,4 @@
-package cn.gct.demo;
+package cn.gcpt.app;
 
 /** Accurate 11-period timetable for the current school timetable. */
 public final class PeriodTimes {

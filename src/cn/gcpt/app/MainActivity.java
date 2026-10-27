@@ -1,4 +1,4 @@
-package cn.gct.demo;
+package cn.gcpt.app;
 
 import android.animation.ArgbEvaluator;
 import android.animation.ValueAnimator;
@@ -84,7 +84,7 @@ public class MainActivity extends Activity {
     private static final String COURSE_URL =
             "https://jwcjw.gcp.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N253508&layout=default";
     private static final String JWC_HOME_URL = "https://jwcjw.gcp.edu.cn/";
-    private static final String VERSION = "1.0.1";
+    private static final String VERSION = "1.0.2";
     private static final String HOT_WATER_URL = "https://mh60.gcp.edu.cn/";
     private static final String WECHAT_UA =
             "Mozilla/5.0 (Linux; Android 15; PLC110) AppleWebKit/537.36 "

@@ -11,7 +11,7 @@
 
 ## 开发约束
 
-- **平台原生**：不引入 Gradle、AndroidX、第三方 UI 库或图标库；UI 使用 `src/cn/gct/demo/Ui.java` 与 `LineIconView.java`。
+- **平台原生**：不引入 Gradle、AndroidX、第三方 UI 库或图标库；UI 使用 `src/cn/gcpt/app/Ui.java` 与 `LineIconView.java`。
 - **最小权限**：只保留 INTERNET；`allowBackup=false`；不新增后台服务、推送、统计或账号体系。
 - **本地优先**：不上传账号、课表、余额、二维码；不新增服务端依赖。
 - **安全**：不开启 WebView 远程调试；不添加 JavaScript 原生桥；不忽略 SSL 错误；新增域名必须说明理由。

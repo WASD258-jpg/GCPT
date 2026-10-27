@@ -3,11 +3,11 @@
   <h1>广城通</h1>
   <p><b>广州城市职业学院校园信息聚合客户端</b><br/>课表 · 学业 · 学工 · 校园卡 · 热水 · 图书馆 · 校园服务</p>
   <p>
-    <a href="https://github.com/WASD258-jpg/guangcheng-tong/releases/latest"><img src="https://img.shields.io/github/v/release/WASD258-jpg/guangcheng-tong?style=flat-square&color=276757" alt="release" /></a>
+    <a href="https://github.com/WASD258-jpg/GCPT/releases/latest"><img src="https://img.shields.io/github/v/release/WASD258-jpg/GCPT?style=flat-square&color=276757" alt="release" /></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-276757?style=flat-square" alt="license" /></a>
     <img src="https://img.shields.io/badge/Android-8.0%2B-276757?style=flat-square&logo=android&logoColor=white" alt="android" />
     <img src="https://img.shields.io/badge/Java-8-276757?style=flat-square" alt="java" />
-    <a href="https://github.com/WASD258-jpg/guangcheng-tong/stargazers"><img src="https://img.shields.io/github/stars/WASD258-jpg/guangcheng-tong?style=flat-square&color=276757" alt="stars" /></a>
+    <a href="https://github.com/WASD258-jpg/GCPT/stargazers"><img src="https://img.shields.io/github/stars/WASD258-jpg/GCPT?style=flat-square&color=276757" alt="stars" /></a>
   </p>
   <p>
     <a href="#下载">下载</a> ·
@@ -26,7 +26,7 @@
 
 广城通把分散在门户、教务、学工、一卡通、图书馆和微信小程序里的校园入口，收进一个 Android 原生客户端。它不运营服务器、不收集数据：账号、密码、课表、余额和电子证只留在本机。
 
-项目选择 **平台原生组件 + 手写设计系统**，不依赖 Gradle、AndroidX 或第三方 UI 库；所有界面、图标、动画、网络请求和 Keystore 凭证逻辑都在 `src/cn/gct/demo` 中可审计。
+项目选择 **平台原生组件 + 手写设计系统**，不依赖 Gradle、AndroidX 或第三方 UI 库；所有界面、图标、动画、网络请求和 Keystore 凭证逻辑都在 `src/cn/gcpt/app` 中可审计。
 
 ## 界面
 
@@ -52,15 +52,15 @@
 
 ## 下载
 
-从 [Releases](https://github.com/WASD258-jpg/guangcheng-tong/releases/latest) 下载：
+从 [Releases](https://github.com/WASD258-jpg/GCPT/releases/latest) 下载：
 
-- 当前版本：**1.0.1**（versionCode 1001）
-- 文件：`guangcheng-1.0.1.apk`
-- 包名：`cn.gct.demo`
+- 当前版本：**1.0.2**（versionCode 1002）
+- 文件：`gcpt-1.0.2.apk`
+- 包名：`cn.gcpt.app`
 - 系统：Android 8.0（API 26）及以上
-- SHA-256：`5D755906C71F21595585250DFE139976B3C61098CDAE233727C31530F3ADE6A2`
+- SHA-256：`2A8B247480998082992005E7C44CD3237A49567F95F9F42CD86C52C989A4E5F1`
 
-> 1.0.1 与 1.0 使用同一 release keystore，可从 1.0 覆盖升级；从 0.99rc19 升级因签名不同，必须先卸载，本地数据会清空。正式签名证书 SHA-256：`8d4699d2c69f1771695804fa4fb8a5adaa88001054c0ef7c0ccbf42d084c25a3`。
+> 1.0.2 使用新包名 `cn.gcpt.app`，是独立应用；旧 1.0.1（`cn.gct.demo`）的数据不会自动迁移，请重新登录 / 导入。正式签名证书 SHA-256：`8d4699d2c69f1771695804fa4fb8a5adaa88001054c0ef7c0ccbf42d084c25a3`。
 
 ## 构建
 
@@ -78,7 +78,7 @@ pwsh -File .\build-demo.ps1
 ## 项目结构
 
 ```text
-src/cn/gct/demo/      Java 源码（单 Activity、无第三方 UI 库）
+src/cn/gcpt/app/      Java 源码（单 Activity、无第三方 UI 库）
 assets/               WebView 注入的校历/课表/学时脚本
 res/                  自适应图标、网络配置、主题
 docs/                 架构、构建
@@ -112,8 +112,8 @@ AndroidManifest.xml   清单（仅 INTERNET，allowBackup=false）
 本项目以 [GNU General Public License v3.0](LICENSE) 开源，另见 [NOTICE](NOTICE)。你可以自由使用、修改和分发，但衍生作品需继续以 GPL-3.0 开源，且不提供担保。
 
 <div align="center">
-  <a href="https://star-history.com/#WASD258-jpg/guangcheng-tong&Date">
-    <img src="https://api.star-history.com/svg?repos=WASD258-jpg/guangcheng-tong&type=Date" alt="Star History" width="560" />
+  <a href="https://star-history.com/#WASD258-jpg/GCPT&Date">
+    <img src="https://api.star-history.com/svg?repos=WASD258-jpg/GCPT&type=Date" alt="Star History" width="560" />
   </a>
   <br/><br/>
   <sub>非学校官方应用 · 本地优先 · GPL-3.0 · 请使用本人账号并自行保护设备</sub>
