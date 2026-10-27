@@ -84,7 +84,8 @@ public class MainActivity extends Activity {
     private static final String COURSE_URL =
             "https://jwcjw.gcp.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N253508&layout=default";
     private static final String JWC_HOME_URL = "https://jwcjw.gcp.edu.cn/";
-    private static final String VERSION = "1.0.2";
+    private static final String LMS_URL = "https://lms.gcp.edu.cn/";
+    private static final String VERSION = "1.0.3";
     private static final String HOT_WATER_URL = "https://mh60.gcp.edu.cn/";
     private static final String WECHAT_UA =
             "Mozilla/5.0 (Linux; Android 15; PLC110) AppleWebKit/537.36 "
@@ -501,6 +502,10 @@ public class MainActivity extends Activity {
             dialog.dismiss();
             openServiceWeb("https://yws.gcp.edu.cn/m/");
         }), topMargin(2));
+        panel.addView(menuRow(LineIconView.BUILDING, "宿舍报修", "后勤报修 · 水电门窗", false, () -> {
+            dialog.dismiss();
+            openServiceWeb(LMS_URL);
+        }), topMargin(2));
 
         panel.addView(menuSection("说明"), topMargin(20));
         panel.addView(menuRow(LineIconView.INFO, "数据与隐私须知", "本地数据边界", false, () -> {
@@ -698,7 +703,8 @@ public class MainActivity extends Activity {
         String host = u.getHost() == null ? "" : u.getHost().toLowerCase(Locale.US);
         String path = u.getPath() == null ? "" : u.getPath();
         if ("auth.gcp.edu.cn".equals(host) || path.contains("sso/login")
-                || "home.gcp.edu.cn".equals(host) || "jwcjw.gcp.edu.cn".equals(host)) {
+                || "home.gcp.edu.cn".equals(host) || "jwcjw.gcp.edu.cn".equals(host)
+                || "lms.gcp.edu.cn".equals(host)) {
             // School portal, SSO and 正方 pages all use the phone/portrait layout.
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         } else {
@@ -823,6 +829,8 @@ public class MainActivity extends Activity {
         page.addView(quick2, topMargin(8));
         page.addView(quickCard("学校门户", "综合服务中心与统一认证", LineIconView.HOME,
                 () -> openServiceWeb(HOME_URL)), topMargin(8));
+        page.addView(quickCard("宿舍报修", "后勤报修 · 水电门窗", LineIconView.BUILDING,
+                () -> openServiceWeb(LMS_URL)), topMargin(8));
 
         if (termStart == null) {
             page.addView(buildWeekNudge(), topMargin(14));
@@ -1148,6 +1156,8 @@ public class MainActivity extends Activity {
         page.addView(quick2, topMargin(8));
         page.addView(quickCard("学校门户", "综合服务中心与统一认证", LineIconView.HOME,
                 () -> openServiceWeb(HOME_URL)), topMargin(8));
+        page.addView(quickCard("宿舍报修", "后勤报修 · 水电门窗", LineIconView.BUILDING,
+                () -> openServiceWeb(LMS_URL)), topMargin(8));
 
         TextView footer = Ui.text(this,
                 "进入本页自动同步；密码加密保存，验证码手动。非学校官方应用。",

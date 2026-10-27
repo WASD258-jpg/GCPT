@@ -22,7 +22,7 @@ $env:RELEASE_KS_PASS = (Get-Content .\build\release-keystore-password.txt -Raw).
 pwsh -File .\build-demo.ps1
 ```
 
-输出：`dist/gcpt-1.0.2.apk`。
+输出：`dist/gcpt-1.0.3.apk`。
 
 > `build-demo.ps1` 现在默认使用 `build/release.keystore` 正式签名；如果本地没有该文件，脚本会用 `RELEASE_KS_PASS` 生成一个 4096-bit RSA 的 release key。请自行备份 keystore 和口令，**不要提交**。
 
@@ -30,10 +30,10 @@ pwsh -File .\build-demo.ps1
 
 ```powershell
 $tools = Join-Path $env:ANDROID_HOME 'build-tools\34.0.0'
-& "$tools\apksigner.bat" verify --print-certs dist\gcpt-1.0.2.apk
-& "$tools\aapt.exe" dump badging dist\gcpt-1.0.2.apk |
+& "$tools\apksigner.bat" verify --print-certs dist\gcpt-1.0.3.apk
+& "$tools\aapt.exe" dump badging dist\gcpt-1.0.3.apk |
   Select-String 'package:|application-icon|launchable-activity'
-Get-FileHash -Algorithm SHA256 dist\gcpt-1.0.2.apk
+Get-FileHash -Algorithm SHA256 dist\gcpt-1.0.3.apk
 ```
 
 ## 源码清单
@@ -58,7 +58,7 @@ MainActivity.java
 1. 更新 `MainActivity.VERSION`、`AndroidManifest.xml` 的 `versionCode/versionName`；
 2. 更新 `README.md` 的版本、下载链接和 SHA-256；
 3. 构建并验证签名；
-4. 打 tag，例如 `v1.0.2`；
+4. 打 tag，例如 `v1.0.3`；
 5. 在 GitHub Releases 上传 `dist/guangcheng-<version>.apk`，附上 SHA-256 和数据迁移说明。
 
 release keystore、口令、`build/`、`dist/` 都不进仓库。
