@@ -2,7 +2,7 @@
   "versionCode": 1100,
   "versionName": "1.1.0",
   "notes": "多学期成绩（按学期分组）、考试安排与考场座位、考试自动进课表、学在广城 / 一体化平台入口、一卡通交易明细、应用内检查更新。",
-  "apk": "",
-  "sha256": "",
+  "apk": "https://gitee.com/WASD258-jpg/gcpt/releases/download/v1.1.0/gcpt-1.1.0.apk",
+  "sha256": "5e03c4596694b82fecae8f3e661b5814dc0df8729939260c2aa8751a063a5b9b",
   "page": "https://gitee.com/WASD258-jpg/gcpt/releases"
 }
