@@ -3,6 +3,6 @@
   "versionName": "1.1 验证版",
   "notes": "【测试清单】用于验证应用内更新：应用内下载 → 校验 SHA-256 与签名 → 系统「更新」确认 → 覆盖安装。验证完成后会改回正式清单。",
   "apk": "https://gitee.com/WASD258-jpg/gcpt/raw/apk/gcpt-1.1.apk",
-  "sha256": "a2ea4beb2b95db7cc1bc684c0e3ba2243ed37e9df3532b99360e0348e6aebd9a",
+  "sha256": "43738c6e7ac7401c54f935c986c804abbca161ba54f8b848acdb048005523ca4",
   "page": "https://gitee.com/WASD258-jpg/gcpt/releases"
 }
