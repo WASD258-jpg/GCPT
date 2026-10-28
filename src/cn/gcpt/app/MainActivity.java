@@ -3871,7 +3871,10 @@ public class MainActivity extends Activity {
     }
 
     private void checkForUpdates(boolean silent) {
-        if (updateChecking) return;
+        if (updateChecking) {
+            if (!silent) Toast.makeText(this, "正在检查更新，请稍候…", Toast.LENGTH_SHORT).show();
+            return;
+        }
         updateChecking = true;
         if (!silent) Toast.makeText(this, "正在检查更新…", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
