@@ -68,6 +68,8 @@
 
 > 1.0.3 起使用新包名 `cn.gcpt.app`，是独立应用；旧 1.0.1（`cn.gct.demo`）的数据不会自动迁移，请重新登录 / 导入。正式签名证书 SHA-256：`8d4699d2c69f1771695804fa4fb8a5adaa88001054c0ef7c0ccbf42d084c25a3`。
 
+国内镜像：[Gitee · WASD258-jpg/gcpt](https://gitee.com/WASD258-jpg/gcpt)（代码镜像；APK 与 Release 仍以 GitHub 为准）。
+
 ## 构建
 
 需要 JDK 17、Android SDK 34 和 build-tools 34.0.0；**不需要 Gradle**。
