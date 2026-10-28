@@ -106,7 +106,7 @@ public class MainActivity extends Activity {
     private static final String XUE_URL = "https://gcpzk.fifedu.com/homePage";
     /** 一体化智慧教学平台（科大讯飞 FIF），另一个独立平台。 */
     private static final String STUDY_URL = "https://study.gcp.edu.cn/";
-    private static final String VERSION = "1.1";
+    private static final String VERSION = "1.1.0";
     private static final int VERSION_CODE = 1100;
     private static final String REPO_GITHUB = "https://github.com/WASD258-jpg/GCPT";
     private static final String REPO_GITEE = "https://gitee.com/WASD258-jpg/gcpt";

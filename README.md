@@ -61,11 +61,11 @@
 
 从 [Releases](https://github.com/WASD258-jpg/GCPT/releases/latest) 下载：
 
-- 当前版本：**1.1**（versionCode 1100）
-- 文件：`gcpt-1.1.apk`
+- 当前版本：**1.1.0**（versionCode 1100）
+- 文件：`gcpt-1.1.0.apk`
 - 包名：`cn.gcpt.app`
 - 系统：Android 8.0（API 26）及以上
-- SHA-256：`A2EA4BEB2B95DB7CC1BC684C0E3BA2243ED37E9DF3532B99360E0348E6AEBD9A`
+- SHA-256：`8CBB139DD451E36835A2F214713F9B7DB0D859174D0887264FAE45EF4768FC00`
 
 > 1.0.3 起使用新包名 `cn.gcpt.app`，是独立应用；旧 1.0.1（`cn.gct.demo`）的数据不会自动迁移，请重新登录 / 导入。正式签名证书 SHA-256：`8d4699d2c69f1771695804fa4fb8a5adaa88001054c0ef7c0ccbf42d084c25a3`。
 

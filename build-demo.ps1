@@ -40,8 +40,8 @@ if (-not (Test-Path build/release.keystore)) {
     & "$env:JAVA_HOME\bin\keytool.exe" -genkeypair -keystore build/release.keystore -storepass $ksPass -keypass $ksPass -alias guangchengtong -dname 'CN=Guangcheng Tong,O=Guangcheng Tong,C=CN' -keyalg RSA -keysize 4096 -validity 10000
     Check-Exit
 }
-& "$tools\apksigner.bat" sign --ks build/release.keystore --ks-key-alias guangchengtong --ks-pass "pass:$ksPass" --key-pass "pass:$ksPass" --out dist/gcpt-1.1.apk build/aligned.apk
+& "$tools\apksigner.bat" sign --ks build/release.keystore --ks-key-alias guangchengtong --ks-pass "pass:$ksPass" --key-pass "pass:$ksPass" --out dist/gcpt-1.1.0.apk build/aligned.apk
 Check-Exit
-& "$tools\apksigner.bat" verify --verbose dist/gcpt-1.1.apk
+& "$tools\apksigner.bat" verify --verbose dist/gcpt-1.1.0.apk
 Check-Exit
-Write-Output 'APK ready: dist/gcpt-1.1.apk'
+Write-Output 'APK ready: dist/gcpt-1.1.0.apk'
