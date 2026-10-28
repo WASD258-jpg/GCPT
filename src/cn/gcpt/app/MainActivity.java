@@ -110,7 +110,9 @@ public class MainActivity extends Activity {
     private static final int VERSION_CODE = 1100;
     private static final String REPO_GITHUB = "https://github.com/WASD258-jpg/GCPT";
     private static final String REPO_GITEE = "https://gitee.com/WASD258-jpg/gcpt";
-    /** 更新清单：国内优先 Gitee raw，失败再回退 GitHub raw。 */
+    /** 更新清单：优先走 Gitee API（无 CDN 缓存），raw / GitHub 兜底。 */
+    private static final String UPDATE_API_GITEE =
+            "https://gitee.com/api/v5/repos/WASD258-jpg/gcpt/contents/version.json?ref=main";
     private static final String UPDATE_JSON_GITEE =
             "https://gitee.com/WASD258-jpg/gcpt/raw/main/version.json";
     private static final String UPDATE_JSON_GITHUB =
@@ -3846,14 +3848,32 @@ public class MainActivity extends Activity {
         updateChecking = true;
         Toast.makeText(this, "正在检查更新…", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
-            String raw = fetchText(UPDATE_JSON_GITEE);
-            if (raw == null || raw.trim().isEmpty()) raw = fetchText(UPDATE_JSON_GITHUB);
-            final String json = raw;
+            final String json = fetchManifest();
             runOnUiThread(() -> {
                 updateChecking = false;
                 showUpdateResult(json);
             });
         }, "gcpt-update").start();
+    }
+
+    /** Gitee 的 raw 有几分钟 CDN 缓存，优先用 API 取文件内容，再回退 raw 与 GitHub。 */
+    private String fetchManifest() {
+        try {
+            String body = fetchText(UPDATE_API_GITEE);
+            if (body != null) {
+                JSONObject obj = new JSONObject(body);
+                String encoded = obj.optString("content", "");
+                if (!encoded.isEmpty()) {
+                    byte[] bytes = Base64.decode(encoded.replaceAll("\\s", ""), Base64.DEFAULT);
+                    String json = new String(bytes, StandardCharsets.UTF_8);
+                    if (json.contains("versionCode")) return json;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        String raw = fetchText(UPDATE_JSON_GITEE);
+        if (raw == null || raw.trim().isEmpty()) raw = fetchText(UPDATE_JSON_GITHUB);
+        return raw;
     }
 
     private static String fetchText(String url) {
