@@ -6,12 +6,20 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.app.Dialog;
+import android.app.PendingIntent;
+import android.app.ProgressDialog;
+import android.content.BroadcastReceiver;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageInstaller;
+import android.content.pm.PackageManager;
+import android.content.pm.Signature;
 import android.content.res.ColorStateList;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
@@ -62,15 +70,19 @@ import javax.crypto.spec.GCMParameterSpec;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
+import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
@@ -95,6 +107,15 @@ public class MainActivity extends Activity {
     /** 一体化智慧教学平台（科大讯飞 FIF），另一个独立平台。 */
     private static final String STUDY_URL = "https://study.gcp.edu.cn/";
     private static final String VERSION = "1.1";
+    private static final int VERSION_CODE = 1100;
+    private static final String REPO_GITHUB = "https://github.com/WASD258-jpg/GCPT";
+    private static final String REPO_GITEE = "https://gitee.com/WASD258-jpg/gcpt";
+    /** 更新清单：国内优先 Gitee raw，失败再回退 GitHub raw。 */
+    private static final String UPDATE_JSON_GITEE =
+            "https://gitee.com/WASD258-jpg/gcpt/raw/main/version.json";
+    private static final String UPDATE_JSON_GITHUB =
+            "https://raw.githubusercontent.com/WASD258-jpg/GCPT/main/version.json";
+    private static final String ACTION_INSTALL_RESULT = "cn.gcpt.app.INSTALL_RESULT";
     private static final String HOT_WATER_URL = "https://mh60.gcp.edu.cn/";
     private static final String WECHAT_UA =
             "Mozilla/5.0 (Linux; Android 15; PLC110) AppleWebKit/537.36 "
@@ -125,6 +146,7 @@ public class MainActivity extends Activity {
     private int gradeStage, examStage;
     private int gradeRequestId;
     private int examRequestId;
+    private boolean updateChecking;
     private boolean syncExamsNext;
     private Dialog gradesSheet, examsSheet, hoursSheet;
     private LinearLayout gradesSheetBody, examsSheetBody;
@@ -3769,6 +3791,15 @@ public class MainActivity extends Activity {
         privacy.addView(clearRow);
         page.addView(privacy, topMargin(8));
 
+        page.addView(Ui.bold(this, "应用更新", 12.5f, Ui.TEXT_SOFT), topMargin(18));
+        LinearLayout updateCard = Ui.card(this);
+        updateCard.addView(settingsRow("检查更新", "当前 " + VERSION, this::checkForUpdates));
+        updateCard.addView(Ui.divider(this));
+        updateCard.addView(settingsRow("GitHub 主仓", "", () -> openRepo(REPO_GITHUB)));
+        updateCard.addView(Ui.divider(this));
+        updateCard.addView(settingsRow("Gitee 镜像", "", () -> openRepo(REPO_GITEE)));
+        page.addView(updateCard, topMargin(8));
+
         TextView quit = Ui.ghost(this, "退出应用", 11);
         quit.setTextColor(Ui.TEXT_FAINT);
         quit.setOnClickListener(v -> finish());
@@ -3798,6 +3829,266 @@ public class MainActivity extends Activity {
                 new LinearLayout.LayoutParams(dp(15), dp(15)));
         row.setOnClickListener(v -> action.run());
         return row;
+    }
+
+    // ---------------------------------------------------------------- updates & repos
+
+    private void openRepo(String url) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (Exception e) {
+            Toast.makeText(this, "没有可用的浏览器打开链接", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void checkForUpdates() {
+        if (updateChecking) return;
+        updateChecking = true;
+        Toast.makeText(this, "正在检查更新…", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            String raw = fetchText(UPDATE_JSON_GITEE);
+            if (raw == null || raw.trim().isEmpty()) raw = fetchText(UPDATE_JSON_GITHUB);
+            final String json = raw;
+            runOnUiThread(() -> {
+                updateChecking = false;
+                showUpdateResult(json);
+            });
+        }, "gcpt-update").start();
+    }
+
+    private static String fetchText(String url) {
+        HttpURLConnection conn = null;
+        try {
+            conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setConnectTimeout(12000);
+            conn.setReadTimeout(15000);
+            conn.setInstanceFollowRedirects(true);
+            conn.setRequestProperty("User-Agent", "GCPT/" + VERSION);
+            if (conn.getResponseCode() != 200) return null;
+            try (InputStream in = conn.getInputStream();
+                 ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                byte[] buffer = new byte[4096];
+                int read;
+                while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
+                return out.toString("UTF-8");
+            }
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    private void showUpdateResult(String json) {
+        JSONObject obj = null;
+        if (json != null && !json.trim().isEmpty()) {
+            try {
+                obj = new JSONObject(json.trim());
+            } catch (JSONException ignored) {
+            }
+        }
+        if (obj == null) {
+            new AlertDialog.Builder(this)
+                    .setTitle("检查更新失败")
+                    .setMessage("没能读取版本信息。可以到仓库发布页手动查看。")
+                    .setPositiveButton("打开发布页", (d, w) -> openRepo(REPO_GITEE + "/releases"))
+                    .setNegativeButton("关闭", null)
+                    .show();
+            return;
+        }
+        final int code = obj.optInt("versionCode", 0);
+        final String name = obj.optString("versionName", "").trim();
+        String notes = obj.optString("notes", "").trim();
+        final String apk = obj.optString("apk", "").trim();
+        final String sha = obj.optString("sha256", "").trim();
+        String page = obj.optString("page", "").trim();
+        final String releasePage = page.isEmpty() ? REPO_GITEE + "/releases" : page;
+        if (code <= VERSION_CODE) {
+            new AlertDialog.Builder(this)
+                    .setTitle("已是最新版本")
+                    .setMessage("当前 " + VERSION + "，没有发现更新。")
+                    .setPositiveButton("好", null)
+                    .show();
+            return;
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(this)
+                .setTitle("发现新版本 " + (name.isEmpty() ? String.valueOf(code) : name))
+                .setMessage(notes.isEmpty() ? "可以下载安装更新，数据会保留。" : notes)
+                .setNegativeButton("以后再说", null);
+        if (!apk.isEmpty() && apk.startsWith("https://")) {
+            builder.setPositiveButton("下载并安装", (d, w) -> downloadUpdate(apk, sha, name));
+            builder.setNeutralButton("打开发布页", (d, w) -> openRepo(releasePage));
+        } else {
+            builder.setPositiveButton("打开发布页", (d, w) -> openRepo(releasePage));
+        }
+        builder.show();
+    }
+
+    private void downloadUpdate(final String url, final String sha256, final String versionName) {
+        final ProgressDialog progress = new ProgressDialog(this);
+        progress.setTitle("正在下载 " + (versionName.isEmpty() ? "更新" : versionName));
+        progress.setMessage("下载完成后会校验并交给系统安装。");
+        progress.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+        progress.setMax(100);
+        progress.setCancelable(false);
+        progress.show();
+        new Thread(() -> {
+            final File target = new File(getCacheDir(), "gcpt-update.apk");
+            String problem = null;
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(30000);
+                conn.setInstanceFollowRedirects(true);
+                conn.setRequestProperty("User-Agent", "GCPT/" + VERSION);
+                int status = conn.getResponseCode();
+                if (status != 200) throw new IllegalStateException("HTTP " + status);
+                int total = conn.getContentLength();
+                try (InputStream in = conn.getInputStream();
+                     FileOutputStream out = new FileOutputStream(target)) {
+                    byte[] buffer = new byte[8192];
+                    long done = 0;
+                    int read;
+                    int last = -1;
+                    while ((read = in.read(buffer)) != -1) {
+                        out.write(buffer, 0, read);
+                        done += read;
+                        if (total > 0) {
+                            int pct = (int) (done * 100 / Math.max(1, total));
+                            if (pct != last) {
+                                last = pct;
+                                runOnUiThread(() -> progress.setProgress(pct));
+                            }
+                        }
+                    }
+                }
+                conn.disconnect();
+                if (!sha256.isEmpty() && !sha256.equalsIgnoreCase(sha256Of(target))) {
+                    problem = "校验失败：安装包 SHA-256 与发布信息不一致，已删除。";
+                } else if (!sameSignature(target)) {
+                    problem = "签名校验失败：安装包不是本项目签发的，已拒绝安装。";
+                }
+            } catch (Exception e) {
+                problem = "下载失败：" + e.getMessage();
+            }
+            final String error = problem;
+            runOnUiThread(() -> {
+                progress.dismiss();
+                if (error != null) {
+                    if (target.exists()) target.delete();
+                    new AlertDialog.Builder(this)
+                            .setTitle("更新未完成")
+                            .setMessage(error)
+                            .setPositiveButton("打开发布页", (d, w) -> openRepo(REPO_GITEE + "/releases"))
+                            .setNegativeButton("关闭", null)
+                            .show();
+                    return;
+                }
+                startInstall(target);
+            });
+        }, "gcpt-download").start();
+    }
+
+    private void startInstall(File apk) {
+        PackageManager pm = getPackageManager();
+        if (!pm.canRequestPackageInstalls()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("需要安装权限")
+                    .setMessage("请允许「广城通」安装未知应用，返回后再点一次「下载并安装」。")
+                    .setPositiveButton("去设置", (d, w) -> {
+                        try {
+                            startActivity(new Intent(
+                                    android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                    Uri.parse("package:" + getPackageName())));
+                        } catch (Exception ignored) {
+                        }
+                    })
+                    .setNegativeButton("取消", null)
+                    .show();
+            return;
+        }
+        try {
+            final PackageInstaller installer = pm.getPackageInstaller();
+            PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
+                    PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+            params.setAppPackageName(getPackageName());
+            int sessionId = installer.createSession(params);
+            BroadcastReceiver receiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    int status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS,
+                            PackageInstaller.STATUS_FAILURE);
+                    if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+                        Intent confirm = intent.getParcelableExtra(Intent.EXTRA_INTENT);
+                        if (confirm != null) {
+                            confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            try {
+                                startActivity(confirm);
+                            } catch (Exception ignored) {
+                            }
+                        }
+                    } else if (status != PackageInstaller.STATUS_SUCCESS) {
+                        String msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
+                        Toast.makeText(MainActivity.this,
+                                "安装未完成" + (msg == null || msg.isEmpty() ? "" : "：" + msg),
+                                Toast.LENGTH_LONG).show();
+                    }
+                    try {
+                        unregisterReceiver(this);
+                    } catch (Exception ignored) {
+                    }
+                }
+            };
+            registerReceiver(receiver, new IntentFilter(ACTION_INSTALL_RESULT),
+                    Context.RECEIVER_NOT_EXPORTED);
+            PendingIntent pending = PendingIntent.getBroadcast(this, sessionId,
+                    new Intent(ACTION_INSTALL_RESULT).setPackage(getPackageName()),
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
+            try (PackageInstaller.Session session = installer.openSession(sessionId)) {
+                try (OutputStream out = session.openWrite("gcpt.apk", 0, apk.length());
+                     FileInputStream in = new FileInputStream(apk)) {
+                    byte[] buffer = new byte[8192];
+                    int read;
+                    while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
+                    session.fsync(out);
+                }
+                session.commit(pending.getIntentSender());
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "无法启动安装：" + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private static String sha256Of(File file) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (InputStream in = new FileInputStream(file)) {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = in.read(buffer)) != -1) digest.update(buffer, 0, read);
+            }
+            StringBuilder hex = new StringBuilder();
+            for (byte b : digest.digest()) hex.append(String.format(Locale.US, "%02x", b));
+            return hex.toString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private boolean sameSignature(File apk) {
+        try {
+            PackageManager pm = getPackageManager();
+            PackageInfo other = pm.getPackageArchiveInfo(apk.getAbsolutePath(),
+                    PackageManager.GET_SIGNATURES);
+            PackageInfo self = pm.getPackageInfo(getPackageName(), PackageManager.GET_SIGNATURES);
+            Signature[] a = other == null ? null : other.signatures;
+            Signature[] b = self == null ? null : self.signatures;
+            if (a == null || b == null || a.length == 0 || b.length == 0) return false;
+            return Arrays.equals(a[0].toByteArray(), b[0].toByteArray());
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private void showCredentialEditor(String prefix) {
