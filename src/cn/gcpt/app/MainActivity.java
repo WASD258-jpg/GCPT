@@ -118,6 +118,9 @@ public class MainActivity extends Activity {
     private static final String UPDATE_JSON_GITHUB =
             "https://raw.githubusercontent.com/WASD258-jpg/GCPT/main/version.json";
     private static final String ACTION_INSTALL_RESULT = "cn.gcpt.app.INSTALL_RESULT";
+    /** 蓝奏云备用下载（文件夹分享，密码随链接一起给出）。 */
+    private static final String LANZOU_URL = "https://wasd258.lanzoub.com/b01d7caxdg";
+    private static final String LANZOU_PASSWORD = "9xjb";
     private static final String HOT_WATER_URL = "https://mh60.gcp.edu.cn/";
     private static final String WECHAT_UA =
             "Mozilla/5.0 (Linux; Android 15; PLC110) AppleWebKit/537.36 "
@@ -149,6 +152,8 @@ public class MainActivity extends Activity {
     private int gradeRequestId;
     private int examRequestId;
     private boolean updateChecking;
+    /** 已下载待安装的包：授权返回后可继续安装，不再重新下载。 */
+    private File pendingInstall;
     private boolean syncExamsNext;
     private Dialog gradesSheet, examsSheet, hoursSheet;
     private LinearLayout gradesSheetBody, examsSheetBody;
@@ -163,6 +168,7 @@ public class MainActivity extends Activity {
     private LocalDate termStart;
     private LocalDate lastToday;
     private boolean autoWeek = true, showTeacher = true;
+    private boolean autoCheckUpdate = true;
     private boolean updatingSwitch;
 
     private FrameLayout content;
@@ -226,6 +232,12 @@ public class MainActivity extends Activity {
         showTab(tab);
         maybeAutoSync();
         showFirstRunNotice();
+        // 每次启动自动检查一次（首次启动未同意须知前不联网）
+        if (prefs.getBoolean("noticeAccepted", false)) {
+            web.postDelayed(() -> {
+                if (autoCheckUpdate) checkForUpdates(true);
+            }, 2500);
+        }
     }
 
     private void showFirstRunNotice() {
@@ -288,6 +300,7 @@ public class MainActivity extends Activity {
         termStart = TermCalendar.parse(prefs.getString("termStart", ""));
         autoWeek = prefs.getBoolean("autoWeek", true);
         showTeacher = prefs.getBoolean("showTeacher", true);
+        autoCheckUpdate = prefs.getBoolean("autoCheckUpdate", true);
         viewWeek = Math.max(1, Math.min(MAX_WEEK, prefs.getInt("selectedWeek", 1)));
     }
 
@@ -3795,7 +3808,16 @@ public class MainActivity extends Activity {
 
         page.addView(Ui.bold(this, "应用更新", 12.5f, Ui.TEXT_SOFT), topMargin(18));
         LinearLayout updateCard = Ui.card(this);
-        updateCard.addView(settingsRow("检查更新", "当前 " + VERSION, this::checkForUpdates));
+        updateCard.addView(settingsRow("检查更新", "当前 " + VERSION, () -> checkForUpdates(false)));
+        updateCard.addView(Ui.divider(this));
+        updateCard.addView(switchRow("自动检查更新", "每次打开应用检查一次", autoCheckUpdate,
+                (button, checked) -> {
+                    autoCheckUpdate = checked;
+                    prefs.edit().putBoolean("autoCheckUpdate", checked).apply();
+                }));
+        updateCard.addView(Ui.divider(this));
+        updateCard.addView(settingsRow("蓝奏云备用下载", "密码 " + LANZOU_PASSWORD,
+                () -> openRepo(LANZOU_URL)));
         updateCard.addView(Ui.divider(this));
         updateCard.addView(settingsRow("GitHub 主仓", "", () -> openRepo(REPO_GITHUB)));
         updateCard.addView(Ui.divider(this));
@@ -3843,15 +3865,20 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void checkForUpdates() {
+    private void openLanzou() {
+        Toast.makeText(this, "蓝奏云访问密码：" + LANZOU_PASSWORD, Toast.LENGTH_LONG).show();
+        openRepo(LANZOU_URL);
+    }
+
+    private void checkForUpdates(boolean silent) {
         if (updateChecking) return;
         updateChecking = true;
-        Toast.makeText(this, "正在检查更新…", Toast.LENGTH_SHORT).show();
+        if (!silent) Toast.makeText(this, "正在检查更新…", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             final String json = fetchManifest();
             runOnUiThread(() -> {
                 updateChecking = false;
-                showUpdateResult(json);
+                showUpdateResult(json, silent);
             });
         }, "gcpt-update").start();
     }
@@ -3899,7 +3926,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void showUpdateResult(String json) {
+    private void showUpdateResult(String json, boolean silent) {
         JSONObject obj = null;
         if (json != null && !json.trim().isEmpty()) {
             try {
@@ -3908,6 +3935,7 @@ public class MainActivity extends Activity {
             }
         }
         if (obj == null) {
+            if (silent) return;
             new AlertDialog.Builder(this)
                     .setTitle("检查更新失败")
                     .setMessage("没能读取版本信息。可以到仓库发布页手动查看。")
@@ -3924,6 +3952,7 @@ public class MainActivity extends Activity {
         String page = obj.optString("page", "").trim();
         final String releasePage = page.isEmpty() ? REPO_GITEE + "/releases" : page;
         if (code <= VERSION_CODE) {
+            if (silent) return;
             new AlertDialog.Builder(this)
                     .setTitle("已是最新版本")
                     .setMessage("当前 " + VERSION + "，没有发现更新。")
@@ -3937,14 +3966,19 @@ public class MainActivity extends Activity {
                 .setNegativeButton("以后再说", null);
         if (!apk.isEmpty() && apk.startsWith("https://")) {
             builder.setPositiveButton("下载并安装", (d, w) -> downloadUpdate(apk, sha, name));
-            builder.setNeutralButton("打开发布页", (d, w) -> openRepo(releasePage));
+            builder.setNeutralButton("备用下载", (d, w) -> openLanzou());
         } else {
             builder.setPositiveButton("打开发布页", (d, w) -> openRepo(releasePage));
+            builder.setNeutralButton("备用下载", (d, w) -> openLanzou());
         }
         builder.show();
     }
 
     private void downloadUpdate(final String url, final String sha256, final String versionName) {
+        if (!getPackageManager().canRequestPackageInstalls()) {
+            promptInstallPermission();
+            return;
+        }
         final ProgressDialog progress = new ProgressDialog(this);
         progress.setTitle("正在下载 " + (versionName.isEmpty() ? "更新" : versionName));
         progress.setMessage("下载完成后会校验并交给系统安装。");
@@ -3956,33 +3990,37 @@ public class MainActivity extends Activity {
             final File target = new File(getCacheDir(), "gcpt-update.apk");
             String problem = null;
             try {
-                HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-                conn.setConnectTimeout(15000);
-                conn.setReadTimeout(30000);
-                conn.setInstanceFollowRedirects(true);
-                conn.setRequestProperty("User-Agent", "GCPT/" + VERSION);
-                int status = conn.getResponseCode();
-                if (status != 200) throw new IllegalStateException("HTTP " + status);
-                int total = conn.getContentLength();
-                try (InputStream in = conn.getInputStream();
-                     FileOutputStream out = new FileOutputStream(target)) {
-                    byte[] buffer = new byte[8192];
-                    long done = 0;
-                    int read;
-                    int last = -1;
-                    while ((read = in.read(buffer)) != -1) {
-                        out.write(buffer, 0, read);
-                        done += read;
-                        if (total > 0) {
-                            int pct = (int) (done * 100 / Math.max(1, total));
-                            if (pct != last) {
-                                last = pct;
-                                runOnUiThread(() -> progress.setProgress(pct));
+                boolean reusable = target.exists() && !sha256.isEmpty()
+                        && sha256.equalsIgnoreCase(sha256Of(target));
+                if (!reusable) {
+                    HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+                    conn.setConnectTimeout(15000);
+                    conn.setReadTimeout(30000);
+                    conn.setInstanceFollowRedirects(true);
+                    conn.setRequestProperty("User-Agent", "GCPT/" + VERSION);
+                    int status = conn.getResponseCode();
+                    if (status != 200) throw new IllegalStateException("HTTP " + status);
+                    int total = conn.getContentLength();
+                    try (InputStream in = conn.getInputStream();
+                         FileOutputStream out = new FileOutputStream(target)) {
+                        byte[] buffer = new byte[8192];
+                        long done = 0;
+                        int read;
+                        int last = -1;
+                        while ((read = in.read(buffer)) != -1) {
+                            out.write(buffer, 0, read);
+                            done += read;
+                            if (total > 0) {
+                                int pct = (int) (done * 100 / Math.max(1, total));
+                                if (pct != last) {
+                                    last = pct;
+                                    runOnUiThread(() -> progress.setProgress(pct));
+                                }
                             }
                         }
                     }
+                    conn.disconnect();
                 }
-                conn.disconnect();
                 if (!sha256.isEmpty() && !sha256.equalsIgnoreCase(sha256Of(target))) {
                     problem = "校验失败：安装包 SHA-256 与发布信息不一致，已删除。";
                 } else if (!sameSignature(target)) {
@@ -4004,27 +4042,32 @@ public class MainActivity extends Activity {
                             .show();
                     return;
                 }
+                pendingInstall = target;
                 startInstall(target);
             });
         }, "gcpt-download").start();
     }
 
+    private void promptInstallPermission() {
+        new AlertDialog.Builder(this)
+                .setTitle("需要安装权限")
+                .setMessage("Android 要求你允许「广城通」安装应用。授权后回到本页会自动继续安装，不会重复下载。")
+                .setPositiveButton("去设置", (d, w) -> {
+                    try {
+                        startActivity(new Intent(
+                                android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                Uri.parse("package:" + getPackageName())));
+                    } catch (Exception ignored) {
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
     private void startInstall(File apk) {
         PackageManager pm = getPackageManager();
         if (!pm.canRequestPackageInstalls()) {
-            new AlertDialog.Builder(this)
-                    .setTitle("需要安装权限")
-                    .setMessage("请允许「广城通」安装未知应用，返回后再点一次「下载并安装」。")
-                    .setPositiveButton("去设置", (d, w) -> {
-                        try {
-                            startActivity(new Intent(
-                                    android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                                    Uri.parse("package:" + getPackageName())));
-                        } catch (Exception ignored) {
-                        }
-                    })
-                    .setNegativeButton("取消", null)
-                    .show();
+            promptInstallPermission();
             return;
         }
         try {
@@ -5084,6 +5127,11 @@ public class MainActivity extends Activity {
             }
             refreshVisible();
             maybeAutoSync();
+        }
+        if (pendingInstall != null && getPackageManager().canRequestPackageInstalls()) {
+            File apk = pendingInstall;
+            pendingInstall = null;
+            if (apk.exists()) startInstall(apk);
         }
     }
 
