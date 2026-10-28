@@ -1,7 +1,7 @@
 {
-  "versionCode": 1200,
-  "versionName": "1.2-test",
-  "notes": "这是用于验证更新弹窗的测试清单，稍后会改回 1.1。",
+  "versionCode": 1100,
+  "versionName": "1.1",
+  "notes": "多学期成绩（按学期分组）、考试安排与考场座位、考试自动进课表、学在广城 / 一体化平台入口、一卡通交易明细。",
   "apk": "",
   "sha256": "",
   "page": "https://gitee.com/WASD258-jpg/gcpt/releases"
