@@ -55,9 +55,13 @@ public final class CourseDetailDialog {
 
         LinearLayout meta = Ui.row(c);
         String timeRange = PeriodTimes.range(course.start, course.end);
+        boolean examClock = course.timeText != null && !course.timeText.isEmpty();
+        String whenText = examClock
+                ? "考试 " + course.timeText
+                : "第 " + course.start + "–" + course.end + " 节"
+                        + (timeRange.isEmpty() ? "" : " · " + timeRange);
         TextView metaText = Ui.medium(c, TermCalendar.DAYS[Math.max(0, Math.min(6, course.day - 1))]
-                + " · 第 " + course.start + "–" + course.end + " 节"
-                + (timeRange.isEmpty() ? "" : " · " + timeRange), 11.5f,
+                + " · " + whenText, 11.5f,
                 WeekGrid.accentColor(course.name));
         meta.addView(metaText);
         if (course.adjusted) {
@@ -80,7 +84,8 @@ public final class CourseDetailDialog {
         }
         titleBlock.addView(meta);
 
-        String displayName = course.name.replace("【调】", "").replace("[调]", "").trim();
+        String displayName = course.name.replace("【考试】", "")
+                .replace("【调】", "").replace("[调]", "").trim();
         if (displayName.isEmpty()) displayName = course.name;
         TextView title = Ui.bold(c, displayName, 19, Ui.TEXT);
         title.setLineSpacing(Ui.dp(c, 2), 1f);
@@ -110,7 +115,12 @@ public final class CourseDetailDialog {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         infoRow(c, body, "地点", course.room == null || course.room.isEmpty() ? "地点待确认" : course.room);
-        if (!timeRange.isEmpty()) infoRow(c, body, "时间", timeRange);
+        if (examClock) {
+            infoRow(c, body, "考试时间", course.timeText);
+        } else if (!timeRange.isEmpty()) {
+            infoRow(c, body, "时间", timeRange);
+        }
+        if (course.seat != null && !course.seat.isEmpty()) infoRow(c, body, "座位", course.seat);
         if (course.teacher != null && !course.teacher.isEmpty()) infoRow(c, body, "教师", course.teacher);
         if (course.group != null && !course.group.isEmpty()) infoRow(c, body, "班级", course.group);
         if (course.hours != null && !course.hours.isEmpty()) infoRow(c, body, "学时", course.hours);

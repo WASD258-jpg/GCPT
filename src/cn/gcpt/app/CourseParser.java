@@ -7,6 +7,8 @@ import java.util.regex.*;
 public final class CourseParser {
     public static final class Course {
         public String name, room, teacher, weeksText, raw, group, hours;
+        /** Exam-only extras: seat number and the school's clock range ("09:00-11:00"). */
+        public String seat, timeText;
         public int day, start, end;
         public SortedSet<Integer> weeks = new TreeSet<Integer>();
         public boolean adjusted;

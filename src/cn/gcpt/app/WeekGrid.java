@@ -246,8 +246,11 @@ public final class WeekGrid extends View {
 
         paint.setTypeface(medium);
         paint.setColor(Ui.TEXT);
-        paint.setTextSize(sp(13));
-        int nameLines = drawWrapped(canvas, c.name, textX, next, maxW, lineH,
+        // Keep the exam marker short enough that the course name still fits in a narrow column.
+        boolean exam = c.name.startsWith("【考试】");
+        paint.setTextSize(sp(exam ? 11.5f : 13));
+        String title = exam ? "【考】" + c.name.substring(4) : c.name;
+        int nameLines = drawWrapped(canvas, title, textX, next, maxW, lineH,
                 h >= rowH * 3.2f ? 3 : h >= rowH * 2.2f ? 2 : 1);
         next += nameLines * lineH;
 

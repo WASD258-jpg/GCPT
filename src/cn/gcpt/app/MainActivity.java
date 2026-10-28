@@ -53,6 +53,7 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.json.JSONTokener;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -84,8 +85,16 @@ public class MainActivity extends Activity {
     private static final String COURSE_URL =
             "https://jwcjw.gcp.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N253508&layout=default";
     private static final String JWC_HOME_URL = "https://jwcjw.gcp.edu.cn/";
+    private static final String GRADE_URL =
+            "https://jwcjw.gcp.edu.cn/jwglxt/cjcx/cjcx_cxDgXscj.html?gnmkdm=N305005&layout=default";
+    private static final String EXAM_URL =
+            "https://jwcjw.gcp.edu.cn/jwglxt/kwgl/kscx_cxXsksxxIndex.html?gnmkdm=N358105&layout=default";
     private static final String LMS_URL = "https://lms.gcp.edu.cn/";
-    private static final String VERSION = "1.0.3";
+    /** 学在广城 = 讯飞智课平台，托管在校外域名 fifedu.com。 */
+    private static final String XUE_URL = "https://gcpzk.fifedu.com/homePage";
+    /** 一体化智慧教学平台（科大讯飞 FIF），另一个独立平台。 */
+    private static final String STUDY_URL = "https://study.gcp.edu.cn/";
+    private static final String VERSION = "1.1";
     private static final String HOT_WATER_URL = "https://mh60.gcp.edu.cn/";
     private static final String WECHAT_UA =
             "Mozilla/5.0 (Linux; Android 15; PLC110) AppleWebKit/537.36 "
@@ -108,6 +117,17 @@ public class MainActivity extends Activity {
     private boolean prefillOneCard;
     private boolean oneCardCapture;
     private boolean oneCardReturnToLife;
+    private boolean oneCardBill;
+    private String gradesJson = "";
+    private String examsJson = "";
+    private boolean gradesLoading, examsLoading;
+    private String gradesError, examsError;
+    private int gradeStage, examStage;
+    private int gradeRequestId;
+    private int examRequestId;
+    private boolean syncExamsNext;
+    private Dialog gradesSheet, examsSheet, hoursSheet;
+    private LinearLayout gradesSheetBody, examsSheetBody;
     private boolean balanceSyncing;
     private boolean balanceNeedsLogin;
     private int balancePollCount;
@@ -259,6 +279,9 @@ public class MainActivity extends Activity {
         }
         data.rawText = prefs.getString("courseText", "");
         data.lastSync = prefs.getString("lastSync", "");
+        gradesJson = prefs.getString("gradesJson", "");
+        examsJson = prefs.getString("examsJson", "");
+        mergeExamsIntoData();
     }
 
     private int currentWeek() {
@@ -470,6 +493,11 @@ public class MainActivity extends Activity {
                     dialog.dismiss();
                     showTab(TAB_WEEK);
                 }), topMargin(2));
+        panel.addView(menuRow(LineIconView.DOC, "学业", "成绩 · 考试 · 学时",
+                tab == TAB_STUDY, () -> {
+                    dialog.dismiss();
+                    showTab(TAB_STUDY);
+                }), topMargin(2));
         panel.addView(menuRow(LineIconView.CUP, "生活", "校园卡与图书馆",
                 tab == TAB_LIFE, () -> {
                     dialog.dismiss();
@@ -501,6 +529,14 @@ public class MainActivity extends Activity {
         panel.addView(menuRow(LineIconView.CROSS, "网上医务室", "预约与问诊", false, () -> {
             dialog.dismiss();
             openServiceWeb("https://yws.gcp.edu.cn/m/");
+        }), topMargin(2));
+        panel.addView(menuRow(LineIconView.DOC, "学在广城", "讯飞智课 · 课程学习", false, () -> {
+            dialog.dismiss();
+            openServiceWeb(XUE_URL);
+        }), topMargin(2));
+        panel.addView(menuRow(LineIconView.DOC, "一体化平台", "智慧教学 · 课程资源", false, () -> {
+            dialog.dismiss();
+            openServiceWeb(STUDY_URL);
         }), topMargin(2));
         panel.addView(menuRow(LineIconView.BUILDING, "宿舍报修", "后勤报修 · 水电门窗", false, () -> {
             dialog.dismiss();
@@ -615,7 +651,10 @@ public class MainActivity extends Activity {
 
     private void showTab(int which) {
         setStudentMode(false);
-        if (which != TAB_BROWSER) oneCardReturnToLife = false;
+        if (which != TAB_BROWSER) {
+            oneCardReturnToLife = false;
+            oneCardBill = false;
+        }
         tab = which;
         applyOrientationForTab(which);
         if (which == TAB_HOME) renderHome();
@@ -827,7 +866,13 @@ public class MainActivity extends Activity {
         quick2.addView(quickCard("网上医务室", "预约与问诊", LineIconView.CROSS,
                 () -> openServiceWeb("https://yws.gcp.edu.cn/m/")), weightLp(1, 10));
         page.addView(quick2, topMargin(8));
-        page.addView(quickCard("学校门户", "综合服务中心与统一认证", LineIconView.HOME,
+        LinearLayout quick3 = Ui.row(this);
+        quick3.addView(quickCard("学在广城", "讯飞智课", LineIconView.DOC,
+                () -> openServiceWeb(XUE_URL)), weightLp(1, 0));
+        quick3.addView(quickCard("一体化平台", "智慧教学", LineIconView.DOC,
+                () -> openServiceWeb(STUDY_URL)), weightLp(1, 10));
+        page.addView(quick3, topMargin(8));
+        page.addView(quickCard("学校门户", "统一认证 · 服务中心", LineIconView.HOME,
                 () -> openServiceWeb(HOME_URL)), topMargin(8));
         page.addView(quickCard("宿舍报修", "后勤报修 · 水电门窗", LineIconView.BUILDING,
                 () -> openServiceWeb(LMS_URL)), topMargin(8));
@@ -1081,6 +1126,14 @@ public class MainActivity extends Activity {
         manageLink.setOnClickListener(v -> openOneCardZffw());
         manage.addView(manageLink);
         balanceCard.addView(manage);
+        LinearLayout billRow = Ui.row(this);
+        billRow.setPadding(0, dp(4), 0, 0);
+        billRow.addView(Ui.text(this, "消费记录", 9.5f, Ui.TEXT_FAINT));
+        billRow.addView(Ui.flexibleGap(this));
+        TextView billLink = Ui.medium(this, "交易明细 →", 10.5f, Ui.ACCENT);
+        billLink.setOnClickListener(v -> openOneCardBill());
+        billRow.addView(billLink);
+        balanceCard.addView(billRow);
         page.addView(balanceCard, topMargin(16));
 
         page.addView(Ui.bold(this, "宿舍生活", 13, Ui.TEXT), topMargin(20));
@@ -1154,7 +1207,13 @@ public class MainActivity extends Activity {
         quick2.addView(quickCard("网上医务室", "预约与问诊", LineIconView.CROSS,
                 () -> openServiceWeb("https://yws.gcp.edu.cn/m/")), weightLp(1, 10));
         page.addView(quick2, topMargin(8));
-        page.addView(quickCard("学校门户", "综合服务中心与统一认证", LineIconView.HOME,
+        LinearLayout quick3 = Ui.row(this);
+        quick3.addView(quickCard("学在广城", "讯飞智课", LineIconView.DOC,
+                () -> openServiceWeb(XUE_URL)), weightLp(1, 0));
+        quick3.addView(quickCard("一体化平台", "智慧教学", LineIconView.DOC,
+                () -> openServiceWeb(STUDY_URL)), weightLp(1, 10));
+        page.addView(quick3, topMargin(8));
+        page.addView(quickCard("学校门户", "统一认证 · 服务中心", LineIconView.HOME,
                 () -> openServiceWeb(HOME_URL)), topMargin(8));
         page.addView(quickCard("宿舍报修", "后勤报修 · 水电门窗", LineIconView.BUILDING,
                 () -> openServiceWeb(LMS_URL)), topMargin(8));
@@ -1188,6 +1247,7 @@ public class MainActivity extends Activity {
     }
 
     private void openOneCardZffw() {
+        oneCardBill = false;
         showTab(TAB_BROWSER);
         oneCardReturnToLife = true;
         oneCardCapture = true;
@@ -1206,8 +1266,40 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void captureOneCardBalance() {
-        if (!oneCardCapture) return;
+    private void openOneCardBill() {
+        oneCardBill = true;
+        oneCardCapture = false;
+        oneCardReturnToLife = false;
+        prefillOneCard = true;
+        showTab(TAB_BROWSER);
+        browserState.setText("正在打开一卡通账单；登录后会自动进入交易明细。");
+        web.getSettings().setUserAgentString(
+                "Mozilla/5.0 (Linux; Android 15; PLC110) AppleWebKit/537.36 "
+                        + "(KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36");
+        web.loadUrl("https://zffw.gcp.edu.cn/");
+        for (int i = 1; i <= 10; i++) {
+            web.postDelayed(this::runBillScript, 1500L * i);
+        }
+    }
+
+    private void runBillScript() {
+        if (!oneCardBill || web == null) return;
+        String js = "(function(){"
+                + "var els=document.querySelectorAll('a,button,div,span,li');"
+                + "for(var i=0;i<els.length;i++){"
+                + "var t=(els[i].innerText||'').trim();"
+                + "if(t==='账单'||t==='交易明细'||t==='消费明细'||t==='账单明细'||t==='交易流水'){"
+                + "els[i].click();return t;}}"
+                + "return '';})()";
+        web.evaluateJavascript(js, value -> {
+            if (value != null && !value.equals("null") && !value.equals("\"\"")) {
+                oneCardBill = false;
+                browserState.setText("已进入交易明细。");
+            }
+        });
+    }
+
+    private void captureOneCardBalance() {        if (!oneCardCapture) return;
         balancePollCount++;
         String js = "(function(){try{var t=document.body?document.body.innerText:'';"
                 + "var m=t.match(/电子账户[\\s\\S]{0,40}?(\\d+(?:\\.\\d+)?)/);"
@@ -1568,6 +1660,526 @@ public class MainActivity extends Activity {
         showTab(TAB_BROWSER);
         browserState.setText("正在打开校园服务…");
         web.loadUrl(url);
+    }
+
+    private void fetchGrades() {
+        if (gradesLoading) return;
+        cancelHoursLoad();
+        gradesLoading = true;
+        gradesError = null;
+        gradeRequestId++;
+        String current = web.getUrl();
+        boolean onGradePage = current != null
+                && current.contains("jwcjw.gcp.edu.cn") && current.contains("cjcx");
+        refreshVisible();
+        if (onGradePage) {
+            gradeStage = 2;
+            runGradesScript();
+            return;
+        }
+        gradeStage = 1;
+        // Read in the background: no tab switch, the tile updates when the data lands.
+        browserState.setText("正在读取教务成绩（全部学期）…");
+        web.loadUrl(GRADE_URL);
+        web.postDelayed(() -> {
+            if (gradeStage == 1) failGrades("成绩页读取超时，请确认已登录教务。");
+        }, 45000);
+    }
+
+    private void fetchExams() {
+        if (examsLoading) return;
+        cancelHoursLoad();
+        examsLoading = true;
+        examsError = null;
+        examRequestId++;
+        String current = web.getUrl();
+        boolean onExamPage = current != null
+                && current.contains("jwcjw.gcp.edu.cn") && current.contains("kscx");
+        refreshVisible();
+        if (onExamPage) {
+            examStage = 2;
+            runExamsScript();
+            return;
+        }
+        examStage = 1;
+        browserState.setText("正在读取全部考试安排…");
+        web.loadUrl(EXAM_URL);
+        web.postDelayed(() -> {
+            if (examStage == 1) failExams("考试页读取超时，请确认已登录教务。");
+        }, 45000);
+    }
+
+    /** 「同步」刷新成绩与考试：先成绩、完成后接着考试，全程不切页。 */
+    private void syncAcademics() {
+        if (gradesLoading || examsLoading) {
+            Toast.makeText(this, "正在同步，请稍候…", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        syncExamsNext = true;
+        fetchGrades();
+    }
+
+    private void runNextSyncStep() {
+        if (!syncExamsNext) return;
+        syncExamsNext = false;
+        fetchExams();
+    }
+
+    /**
+     * Grades are read through the page's own query endpoint: one POST with empty
+     * 学年/学期 returns every graded term, then the page-side script groups them.
+     * The school page starts empty ("请选择筛选条件!") until a term is chosen, so the
+     * old "scrape #tabGrid once" approach could never see any score.
+     */
+    private void runGradesScript() {
+        if (gradeStage == 0) return;
+        final int req = ++gradeRequestId;
+        String js;
+        try {
+            js = readAsset("extract-grades.js");
+        } catch (Exception e) {
+            failGrades("成绩脚本读取失败，请重新构建后再试。");
+            return;
+        }
+        browserState.setText("正在读取全部学期成绩…");
+        web.evaluateJavascript("window.__gcptGrades=null;", null);
+        web.evaluateJavascript(js, value -> {
+            if (req != gradeRequestId) return;
+            String ret = jsString(value);
+            if (ret.startsWith("throw:")) {
+                failGrades("成绩脚本执行出错：" + ret.substring(6));
+                return;
+            }
+            pollGrades(req, 0);
+        });
+    }
+
+    private void pollGrades(final int req, final int tries) {
+        if (req != gradeRequestId || gradeStage == 0) return;
+        if (tries > 70) {
+            failGrades("成绩读取超时，请确认已登录教务后重试。");
+            return;
+        }
+        web.evaluateJavascript("JSON.stringify(window.__gcptGrades||null)", value -> {
+            if (req != gradeRequestId || gradeStage == 0) return;
+            JSONObject obj = parseFinished(jsString(value));
+            if (obj == null) {
+                web.postDelayed(() -> pollGrades(req, tries + 1), 600);
+                return;
+            }
+            String error = errorOf(obj);
+            if (!error.isEmpty()) {
+                failGrades(fetchErrorText(error, "成绩"));
+                return;
+            }
+            gradesJson = obj.toString();
+            gradeStage = 0;
+            gradesLoading = false;
+            gradesError = null;
+            prefs.edit().putString("gradesJson", gradesJson).apply();
+            refreshVisible();
+            runNextSyncStep();
+        });
+    }
+
+    private void failGrades(String message) {
+        gradeRequestId++;
+        gradeStage = 0;
+        gradesLoading = false;
+        gradesError = message;
+        refreshVisible();
+        runNextSyncStep();
+    }
+
+    private void runExamsScript() {
+        if (examStage == 0) return;
+        final int req = ++examRequestId;
+        String js;
+        try {
+            js = readAsset("extract-exams.js");
+        } catch (Exception e) {
+            failExams("考试脚本读取失败，请重新构建后再试。");
+            return;
+        }
+        browserState.setText("正在读取全部考试安排…");
+        web.evaluateJavascript("window.__gcptExams=null;", null);
+        web.evaluateJavascript(js, value -> {
+            if (req != examRequestId) return;
+            String ret = jsString(value);
+            if (ret.startsWith("throw:")) {
+                failExams("考试脚本执行出错：" + ret.substring(6));
+                return;
+            }
+            pollExams(req, 0);
+        });
+    }
+
+    private void pollExams(final int req, final int tries) {
+        if (req != examRequestId || examStage == 0) return;
+        if (tries > 70) {
+            failExams("考试读取超时，请确认已登录教务后重试。");
+            return;
+        }
+        web.evaluateJavascript("JSON.stringify(window.__gcptExams||null)", value -> {
+            if (req != examRequestId || examStage == 0) return;
+            JSONObject obj = parseFinished(jsString(value));
+            if (obj == null) {
+                web.postDelayed(() -> pollExams(req, tries + 1), 600);
+                return;
+            }
+            String error = errorOf(obj);
+            if (!error.isEmpty()) {
+                failExams(fetchErrorText(error, "考试"));
+                return;
+            }
+            examsJson = obj.toString();
+            examStage = 0;
+            examsLoading = false;
+            examsError = null;
+            prefs.edit().putString("examsJson", examsJson).apply();
+            mergeExamsIntoData();
+            refreshVisible();
+        });
+    }
+
+    private void failExams(String message) {
+        examRequestId++;
+        examStage = 0;
+        examsLoading = false;
+        examsError = message;
+        refreshVisible();
+    }
+
+    /** Returns the finished page payload, or null while the page script is still running. */
+    private static JSONObject parseFinished(String raw) {
+        if (raw == null || raw.isEmpty() || "null".equals(raw)) return null;
+        try {
+            JSONObject obj = new JSONObject(raw);
+            return obj.optBoolean("done", false) ? obj : null;
+        } catch (JSONException e) {
+            return null;
+        }
+    }
+
+    /** Android's org.json turns a JSON null into the string "null"; normalise it away. */
+    private static String errorOf(JSONObject obj) {
+        if (obj.isNull("error")) return "";
+        String error = obj.optString("error", "");
+        return "null".equals(error) ? "" : error;
+    }
+
+    private static String fetchErrorText(String error, String what) {
+        if ("auth".equals(error)) return "教务登录已失效，请重新登录后再读取" + what + "。";
+        if ("empty".equals(error)) return "没有读到" + what + "：教务返回了空列表。";
+        if ("timeout".equals(error)) return what + "接口响应超时，请稍后重试。";
+        return what + "接口返回异常（" + error + "），请稍后重试。";
+    }
+
+    /** evaluateJavascript hands back a JSON-encoded value; unwrap string results. */
+    private static String jsString(String value) {
+        if (value == null) return "";
+        try {
+            Object v = new JSONTokener(value).nextValue();
+            return v instanceof String ? (String) v : "";
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private static int findColumn(JSONArray row, String... keys) {
+        for (int i = 0; i < row.length(); i++) {
+            String v = row.optString(i, "");
+            for (String k : keys) if (v.contains(k)) return i;
+        }
+        return -1;
+    }
+
+    private static String cell(JSONArray row, int i) {
+        if (i < 0 || i >= row.length()) return "";
+        return row.optString(i, "").trim();
+    }
+
+    private static String joinText(String a, String b) {
+        if (a.isEmpty()) return b;
+        if (b.isEmpty()) return a;
+        return a + " · " + b;
+    }
+
+    /** Renders the grouped form {"terms":[{"term","credits","gpa","rows":[{"n","c","g","s","k"}]}]}. */
+    private boolean renderGradesByTerm(LinearLayout card, String raw) {
+        try {
+            JSONObject root = new JSONObject(raw);
+            JSONArray terms = root.optJSONArray("terms");
+            if (terms == null) return false;
+            if (terms.length() == 0) {
+                card.addView(Ui.text(this, "没有读到成绩。", 10, Ui.TEXT_SOFT), topMargin(6));
+                return true;
+            }
+            int total = 0;
+            for (int i = 0; i < terms.length(); i++) {
+                JSONArray r = terms.getJSONObject(i).optJSONArray("rows");
+                if (r != null) total += r.length();
+            }
+            card.addView(Ui.text(this, terms.length() + " 个学期 · " + total + " 门课程",
+                    9.5f, Ui.TEXT_FAINT), topMargin(3));
+            for (int t = 0; t < terms.length(); t++) {
+                JSONObject term = terms.getJSONObject(t);
+                if (t > 0) card.addView(Ui.divider(this), topMargin(6));
+                JSONArray rows = term.optJSONArray("rows");
+                LinearLayout titleRow = Ui.row(this);
+                titleRow.setPadding(0, dp(9), 0, dp(2));
+                titleRow.addView(Ui.medium(this, term.optString("term", "学期"), 11.5f, Ui.ACCENT));
+                titleRow.addView(Ui.flexibleGap(this));
+                double credits = term.optDouble("credits", 0);
+                double gpa = term.optDouble("gpa", 0);
+                String summary = rows == null ? "" : rows.length() + " 门";
+                summary = joinText(summary, credits > 0 ? "学分 " + formatHours(credits) : "");
+                summary = joinText(summary,
+                        gpa > 0 ? "绩点 " + String.format(Locale.CHINA, "%.2f", gpa) : "");
+                if (!summary.isEmpty()) {
+                    titleRow.addView(Ui.text(this, summary, 9.5f, Ui.TEXT_FAINT));
+                }
+                card.addView(titleRow);
+                if (rows == null || rows.length() == 0) {
+                    card.addView(Ui.text(this, "暂无成绩", 10, Ui.TEXT_FAINT));
+                    continue;
+                }
+                for (int i = 0; i < rows.length(); i++) {
+                    JSONObject r = rows.getJSONObject(i);
+                    String name = r.optString("n", "").trim();
+                    if (name.isEmpty()) continue;
+                    LinearLayout line = Ui.row(this);
+                    line.setPadding(0, dp(5), 0, dp(5));
+                    LinearLayout left = Ui.column(this);
+                    left.addView(Ui.text(this, name, 11.5f, Ui.TEXT));
+                    String credit = trimNumber(r.optString("c", ""));
+                    String gpaText = r.optString("g", "").trim();
+                    String nature = r.optString("k", "").trim();
+                    String sub = joinText(credit.isEmpty() ? "" : "学分 " + credit,
+                            gpaText.isEmpty() ? "" : "绩点 " + gpaText);
+                    if (!nature.isEmpty()) sub = joinText(sub, nature);
+                    if (!sub.isEmpty()) left.addView(Ui.text(this, sub, 9.5f, Ui.TEXT_FAINT));
+                    line.addView(left, new LinearLayout.LayoutParams(0,
+                            ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+                    String score = r.optString("s", "").trim();
+                    line.addView(Ui.medium(this, score.isEmpty() ? "—" : score, 13, Ui.ACCENT));
+                    card.addView(line);
+                }
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** "2.0" -> "2", "2.50" stays; keeps credit numbers tidy without changing meaning. */
+    private static String trimNumber(String value) {
+        String v = value == null ? "" : value.trim();
+        if (v.endsWith(".0")) v = v.substring(0, v.length() - 2);
+        return v;
+    }
+
+    /** Legacy flat rows (one scraped table) kept so older cached data still renders. */
+    private void renderGradesFlat(LinearLayout card, String raw) {
+        try {
+            JSONArray rows = new JSONArray(raw);
+            int headerIndex = -1;
+            for (int i = 0; i < rows.length(); i++) {
+                JSONArray r = rows.getJSONArray(i);
+                if (findColumn(r, "课程") >= 0 && findColumn(r, "成绩") >= 0) {
+                    headerIndex = i;
+                    break;
+                }
+            }
+            JSONArray header = headerIndex >= 0 ? rows.getJSONArray(headerIndex) : null;
+            int nameCol = header == null ? 0 : findColumn(header, "课程", "科目");
+            int scoreCol = header == null ? 1 : findColumn(header, "成绩", "分数");
+            int creditCol = header == null ? 2 : findColumn(header, "学分");
+            int gpaCol = header == null ? 3 : findColumn(header, "绩点");
+            int count = 0;
+            for (int i = headerIndex + 1; i < rows.length(); i++) {
+                JSONArray r = rows.getJSONArray(i);
+                String name = cell(r, nameCol);
+                if (name.isEmpty()) continue;
+                LinearLayout line = Ui.row(this);
+                line.setPadding(0, dp(5), 0, dp(5));
+                LinearLayout left = Ui.column(this);
+                left.addView(Ui.text(this, name, 11.5f, Ui.TEXT));
+                String sub = joinText(cell(r, creditCol).isEmpty() ? "" : "学分 " + cell(r, creditCol),
+                        cell(r, gpaCol).isEmpty() ? "" : "绩点 " + cell(r, gpaCol));
+                if (!sub.isEmpty()) left.addView(Ui.text(this, sub, 9.5f, Ui.TEXT_FAINT));
+                line.addView(left, new LinearLayout.LayoutParams(0,
+                        ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+                line.addView(Ui.medium(this, cell(r, scoreCol).isEmpty() ? "—" : cell(r, scoreCol),
+                        13, Ui.ACCENT));
+                card.addView(line);
+                count++;
+            }
+            if (count == 0) card.addView(Ui.text(this, "表格已读取，但没有识别到成绩行。",
+                    10, Ui.TEXT_SOFT), topMargin(6));
+        } catch (Exception e) {
+            card.addView(Ui.text(this, "成绩数据解析失败，请重新读取。", 10, Ui.TEXT_SOFT),
+                    topMargin(6));
+        }
+    }
+
+    private boolean renderExamsByTerm(LinearLayout body) {
+        try {
+            JSONObject root = new JSONObject(examsJson == null ? "" : examsJson.trim());
+            JSONArray terms = root.optJSONArray("terms");
+            if (terms == null) return false;
+            int total = 0;
+            for (int i = 0; i < terms.length(); i++) {
+                JSONArray e = terms.getJSONObject(i).optJSONArray("exams");
+                if (e != null) total += e.length();
+            }
+            if (total == 0) {
+                body.addView(Ui.text(this, "没有读到考试安排。", 11, Ui.TEXT_SOFT), topMargin(6));
+                return true;
+            }
+            body.addView(Ui.text(this, terms.length() + " 个学期 · " + total + " 场考试",
+                    9.5f, Ui.TEXT_FAINT), topMargin(3));
+            boolean firstTerm = true;
+            for (int t = 0; t < terms.length(); t++) {
+                JSONObject term = terms.getJSONObject(t);
+                JSONArray exams = term.optJSONArray("exams");
+                if (exams == null || exams.length() == 0) continue;
+                if (!firstTerm) body.addView(Ui.divider(this), topMargin(6));
+                firstTerm = false;
+                LinearLayout titleRow = Ui.row(this);
+                titleRow.setPadding(0, dp(9), 0, dp(2));
+                titleRow.addView(Ui.medium(this, term.optString("term", "学期"), 11.5f, Ui.ACCENT));
+                titleRow.addView(Ui.flexibleGap(this));
+                titleRow.addView(Ui.text(this, exams.length() + " 场", 9.5f, Ui.TEXT_FAINT));
+                body.addView(titleRow);
+                for (int i = 0; i < exams.length(); i++) {
+                    JSONObject e = exams.getJSONObject(i);
+                    String name = e.optString("n", "").trim();
+                    if (name.isEmpty()) continue;
+                    LinearLayout col = Ui.column(this);
+                    col.setPadding(0, dp(5), 0, dp(5));
+                    col.addView(Ui.text(this, name, 11.5f, Ui.TEXT));
+                    String when = joinText(e.optString("d", "").trim(), e.optString("t", "").trim());
+                    when = joinText(when, e.optString("f", "").trim());
+                    if (!when.isEmpty()) col.addView(Ui.text(this, when, 9.5f, Ui.TEXT_FAINT));
+                    String seat = e.optString("z", "").trim();
+                    String where = joinText(e.optString("r", "").trim(),
+                            seat.isEmpty() ? "" : "座位 " + seat);
+                    if (!where.isEmpty()) col.addView(Ui.text(this, where, 9.5f, Ui.TEXT_FAINT));
+                    String examName = e.optString("m", "").trim();
+                    if (!examName.isEmpty()) {
+                        TextView sub = Ui.text(this, examName, 9f, Ui.TEXT_FAINT);
+                        sub.setSingleLine(true);
+                        sub.setEllipsize(TextUtils.TruncateAt.END);
+                        col.addView(sub);
+                    }
+                    body.addView(col);
+                }
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static LocalDate parseExamDate(String text) {
+        Matcher m = Pattern.compile("(20\\d{2})[-年/](\\d{1,2})[-月/](\\d{1,2})").matcher(text);
+        if (!m.find()) return null;
+        try {
+            return LocalDate.of(Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)),
+                    Integer.parseInt(m.group(3)));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static int toMinutes(String hhmm) {
+        String[] p = hhmm.split(":");
+        if (p.length != 2) return 0;
+        try {
+            return Integer.parseInt(p[0]) * 60 + Integer.parseInt(p[1]);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /** Maps an exam clock range onto the 1..11 period span it overlaps. */
+    private static int[] examPeriods(String start, String end) {
+        int s = toMinutes(start);
+        int e = toMinutes(end);
+        if (s <= 0) return new int[]{1, 2};
+        if (e <= s) e = s + 60;
+        int first = -1, last = -1;
+        for (int p = 1; p <= PeriodTimes.count(); p++) {
+            int ps = toMinutes(PeriodTimes.start(p));
+            int pe = toMinutes(PeriodTimes.end(p));
+            if (pe > s && ps < e) {
+                if (first < 0) first = p;
+                last = p;
+            }
+        }
+        if (first < 0) {
+            // Exams between periods (e.g. lunch slots): attach to the next period that starts later.
+            for (int p = 1; p <= PeriodTimes.count(); p++) {
+                if (toMinutes(PeriodTimes.start(p)) >= s) return new int[]{p, p};
+            }
+            return new int[]{PeriodTimes.count(), PeriodTimes.count()};
+        }
+        return new int[]{Math.max(1, Math.min(11, first)),
+                Math.max(1, Math.min(11, Math.max(first, last)))};
+    }
+
+    private void mergeExamsIntoData() {
+        if (data == null) return;
+        data.courses.removeIf(c -> c.name != null && c.name.startsWith("【考试】"));
+        if (examsJson.isEmpty() || termStart == null) return;
+        try {
+            JSONObject root = new JSONObject(examsJson.trim());
+            JSONArray terms = root.optJSONArray("terms");
+            if (terms == null) return;
+            for (int t = 0; t < terms.length(); t++) {
+                JSONArray exams = terms.getJSONObject(t).optJSONArray("exams");
+                if (exams == null) continue;
+                for (int i = 0; i < exams.length(); i++) {
+                    JSONObject e = exams.getJSONObject(i);
+                    String name = e.optString("n", "").trim();
+                    LocalDate date = parseExamDate(e.optString("d", ""));
+                    if (name.isEmpty() || date == null) continue;
+                    int week = TermCalendar.weekOf(termStart, date);
+                    if (week < 1 || week > MAX_WEEK) continue;
+                    String time = e.optString("t", "").trim();
+                    String[] span = time.split("[-–~]");
+                    String from = span.length > 0 ? span[0].trim() : "";
+                    String to = span.length > 1 ? span[1].trim() : from;
+                    int[] period = examPeriods(from, to);
+                    String room = e.optString("r", "").trim();
+                    String seat = e.optString("z", "").trim();
+                    String examName = e.optString("m", "").trim();
+                    CourseParser.Course c = new CourseParser.Course();
+                    c.name = "【考试】" + name;
+                    c.room = room;
+                    c.seat = seat;
+                    c.timeText = time;
+                    c.teacher = "";
+                    c.day = date.getDayOfWeek().getValue();
+                    c.start = period[0];
+                    c.end = period[1];
+                    c.weeksText = week + "周";
+                    c.weeks.add(week);
+                    c.group = "";
+                    c.hours = "";
+                    StringBuilder raw = new StringBuilder("考试：").append(name).append('\n')
+                            .append(e.optString("s", "")).append('\n')
+                            .append(room.isEmpty() ? "地点待确认" : room);
+                    if (!seat.isEmpty()) raw.append(" · 座位 ").append(seat);
+                    if (!examName.isEmpty()) raw.append('\n').append(examName);
+                    c.raw = raw.toString();
+                    c.adjusted = false;
+                    data.courses.add(c);
+                }
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     private void openLibrary() {
@@ -2003,6 +2615,7 @@ public class MainActivity extends Activity {
     // ---------------------------------------------------------------- week
 
     private void renderWeek() {
+        mergeExamsIntoData();
         weekScreen.removeAllViews();
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
@@ -2169,7 +2782,10 @@ public class MainActivity extends Activity {
         }
 
         for (CourseParser.Course course : data.coursesOn(day, week)) {
+            boolean exam = course.timeText != null && !course.timeText.isEmpty();
             int span = Math.max(1, Math.min(11, course.end) - course.start + 1);
+            // A one-slot exam block is too small to read; give it two rows of paper.
+            if (exam && span < 2) span = 2;
             LinearLayout card = timelineCourseCard(course, span);
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, rowH * span - dp(4));
@@ -2195,12 +2811,16 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout content = Ui.column(this);
         content.setPadding(dp(11), dp(8), dp(10), dp(8));
-        if (span >= 2) {
+        String clock = course.timeText == null ? "" : course.timeText.trim();
+        if (!clock.isEmpty()) {
+            content.addView(Ui.text(this, clock + " · 考试", 9.5f, Ui.TEXT_SOFT));
+        } else if (span >= 2) {
             String range = PeriodTimes.range(course.start, course.end).replace("–", " — ");
             content.addView(Ui.text(this, range + " · 第 " + course.start + "–" + course.end + " 节",
                     9.5f, Ui.TEXT_SOFT));
         }
-        String name = course.name.replace("【调】", "").replace("[调]", "").trim();
+        String name = course.name.replace("【考试】", "")
+                .replace("【调】", "").replace("[调]", "").trim();
         String displayName = name.isEmpty() ? "未命名课程" : name;
         displayName = displayName.replaceAll(
                 "(?<=[A-Za-z0-9])(?=[\\u4e00-\\u9fa5])", " ");
@@ -2214,10 +2834,12 @@ public class MainActivity extends Activity {
         nameView.setEllipsize(TextUtils.TruncateAt.END);
         nameView.setLineSpacing(dp(1), 1f);
         content.addView(nameView, topMargin(3));
-        if (span >= 3) {
+        if (span >= 3 || !clock.isEmpty()) {
             content.addView(Ui.flexibleGap(this));
             String room = course.room == null || course.room.isEmpty() ? "地点待确认" : course.room;
-            content.addView(Ui.text(this, room, 9.5f, Ui.TEXT_FAINT));
+            String seat = course.seat == null ? "" : course.seat.trim();
+            content.addView(Ui.text(this, seat.isEmpty() ? room : room + " · " + seat + " 号",
+                    9.5f, Ui.TEXT_FAINT));
             if (showTeacher && course.teacher != null && !course.teacher.isEmpty()) {
                 content.addView(Ui.text(this, course.teacher, 9.5f, Ui.TEXT_FAINT),
                         topMargin(1));
@@ -2375,6 +2997,7 @@ public class MainActivity extends Activity {
     // ---------------------------------------------------------------- hours
 
     private void renderStudy() {
+        mergeExamsIntoData();
         studyScreen.removeAllViews();
         LinearLayout page = Ui.column(this);
         int side = sidePadding(860);
@@ -2385,106 +3008,324 @@ public class MainActivity extends Activity {
         LinearLayout head = Ui.row(this);
         head.addView(Ui.bold(this, "学业", 24, Ui.TEXT));
         head.addView(Ui.flexibleGap(this));
-        if (hoursData != null) {
-            TextView refresh = Ui.ghost(this, "刷新", 12);
-            refresh.setOnClickListener(v -> fetchHours());
-            head.addView(refresh);
-        }
+        boolean syncing = gradesLoading || examsLoading;
+        TextView sync = Ui.ghost(this, syncing ? "同步中…" : "同步", 12);
+        if (!syncing) sync.setOnClickListener(v -> syncAcademics());
+        head.addView(sync);
         page.addView(head);
-        page.addView(Ui.text(this, "学分 · 学时", 11, Ui.TEXT_FAINT), topMargin(3));
+        page.addView(Ui.text(this, "学时 · 成绩 · 考试", 11, Ui.TEXT_FAINT), topMargin(3));
 
-        LinearLayout metrics = Ui.card(this);
-        LinearLayout metricsRow = Ui.row(this);
-        LinearLayout creditCol = Ui.column(this);
-        creditCol.addView(Ui.text(this, "学分", 10, Ui.TEXT_FAINT));
-        creditCol.addView(Ui.bold(this, "—", 22, Ui.TEXT_FAINT), topMargin(2));
-        creditCol.addView(Ui.text(this, "待接入", 9, Ui.TEXT_FAINT));
-        metricsRow.addView(creditCol, new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        LinearLayout hoursHead = Ui.row(this);
+        hoursHead.setPadding(0, dp(18), 0, dp(6));
+        hoursHead.addView(Ui.medium(this, "学时", 13, Ui.TEXT));
+        hoursHead.addView(Ui.flexibleGap(this));
+        TextView hoursRefresh = Ui.ghost(this, hoursLoading ? "读取中…" : "刷新", 11);
+        if (!hoursLoading) hoursRefresh.setOnClickListener(v -> fetchHours());
+        LinearLayout.LayoutParams hoursRefreshLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hoursRefreshLp.leftMargin = dp(4);
+        hoursHead.addView(hoursRefresh, hoursRefreshLp);
+        page.addView(hoursHead);
+        page.addView(hoursSummaryCard());
 
-        LinearLayout hoursCol = Ui.column(this);
-        hoursCol.addView(Ui.text(this, "学时", 10, Ui.TEXT_FAINT));
-        String total = hoursData == null ? "—"
-                : formatHoursShort(hoursData.total()) + " 学时";
-        hoursCol.addView(Ui.bold(this, total, 22,
-                hoursData == null ? Ui.TEXT_FAINT : Ui.TEAL), topMargin(2));
-        String breakdown = hoursData == null ? "尚未读取"
-                : "心理 " + formatHours(hoursData.psyTotal())
-                + " · 劳动 " + formatHours(hoursData.laborTotal())
-                + " · 创业 " + formatHours(hoursData.ieTotal());
-        hoursCol.addView(Ui.text(this, breakdown, 9, Ui.TEXT_FAINT));
-        metricsRow.addView(hoursCol, new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        LinearLayout acadHead = Ui.row(this);
+        acadHead.setPadding(0, dp(18), 0, dp(6));
+        acadHead.addView(Ui.medium(this, "教务查询", 13, Ui.TEXT));
+        acadHead.addView(Ui.flexibleGap(this));
+        page.addView(acadHead);
 
-        metrics.addView(metricsRow);
-        page.addView(metrics, topMargin(8));
-        page.addView(Ui.text(this, "学分数据后续从教务学业情况接入。",
-                9, Ui.TEXT_FAINT), topMargin(4));
-        page.addView(Ui.medium(this, "学时明细", 13, Ui.TEXT), topMargin(12));
+        LinearLayout tiles = Ui.row(this);
+        tiles.addView(academicTile("成绩", gradesStatusText(), gradesLoading, LineIconView.DOC,
+                this::showGradesSheet), weightLp(1, 0));
+        tiles.addView(academicTile("考试", examsStatusText(), examsLoading, LineIconView.CALENDAR,
+                this::showExamsSheet), weightLp(1, 10));
+        page.addView(tiles, topMargin(2));
 
+        TextView foot = Ui.text(this,
+                "数据来源：教务 / 学工 · 只在本机显示与保存", 9.5f, Ui.TEXT_FAINT);
+        foot.setGravity(Gravity.CENTER);
+        page.addView(foot, topMargin(18));
+    }
+
+    /** 学时概览：这里只放粗略数字，逐条明细进弹窗。 */
+    private View hoursSummaryCard() {
+        LinearLayout card = Ui.card(this);
         if (hoursLoading && hoursData == null) {
-            LinearLayout loading = Ui.card(this);
-            loading.addView(Ui.medium(this, "正在读取学时…", 14, Ui.NAVY));
-            loading.addView(Ui.text(this,
-                    "通过学校登录态访问学工移动端；如果出现 HTTP 明文提示，请确认后再继续。",
-                    11, Ui.TEXT_SOFT), topMargin(6));
-            page.addView(loading, topMargin(14));
-            return;
+            card.addView(Ui.text(this, "正在读取学时…", 11, Ui.TEXT_FAINT));
+            return card;
         }
-
-        if (hoursError != null) {
-            LinearLayout warn = Ui.tintedCard(this, Ui.WARN_BG, 14);
-            TextView message = Ui.text(this, hoursError, 11.5f, Ui.WARN_TEXT);
-            message.setLineSpacing(dp(2), 1f);
-            warn.addView(message);
-            LinearLayout actions = Ui.row(this);
-            TextView retry = Ui.action(this, "重新读取", true);
-            retry.setOnClickListener(v -> fetchHours());
-            actions.addView(retry);
-            TextView login = Ui.action(this, "打开学校登录", false);
-            login.setOnClickListener(v -> showTab(TAB_BROWSER));
-            LinearLayout.LayoutParams loginLp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, dp(44));
-            loginLp.leftMargin = dp(8);
-            actions.addView(login, loginLp);
-            warn.addView(actions, topMargin(10));
-            page.addView(warn, topMargin(14));
-            if (hoursData == null) return;
-        }
-
         if (hoursData == null) {
-            LinearLayout intro = Ui.card(this);
-            intro.addView(Ui.medium(this, "读取你的学时", 15, Ui.TEXT));
-            TextView desc = Ui.text(this,
-                    "使用你在学校门户的登录态，读取心理活动、劳动实践和创新创业学时。"
-                            + "不读取密码，也不上传数据。",
-                    11.5f, Ui.TEXT_SOFT);
-            desc.setLineSpacing(dp(2), 1f);
-            intro.addView(desc, topMargin(6));
+            if (hoursError != null) {
+                card.addView(Ui.text(this, hoursError, 11, Ui.TEXT_SOFT));
+                LinearLayout actions = Ui.row(this);
+                TextView retry = Ui.action(this, "重新读取", true);
+                retry.setOnClickListener(v -> fetchHours());
+                actions.addView(retry);
+                TextView login = Ui.action(this, "打开学校登录", false);
+                login.setOnClickListener(v -> showTab(TAB_BROWSER));
+                LinearLayout.LayoutParams loginLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, dp(44));
+                loginLp.leftMargin = dp(8);
+                actions.addView(login, loginLp);
+                card.addView(actions, topMargin(10));
+                return card;
+            }
+            card.addView(Ui.text(this,
+                    "用学校登录态读取心理活动、劳动实践和创新创业学时；不读取密码，也不上传数据。",
+                    11, Ui.TEXT_SOFT));
             TextView go = Ui.action(this, "读取学时", true);
             go.setOnClickListener(v -> fetchHours());
-            intro.addView(go, topMargin(12));
-            intro.addView(Ui.text(this,
-                    "如果提示需要登录，请先到「教务」完成学校门户登录。",
+            card.addView(go, topMargin(10));
+            card.addView(Ui.text(this, "如果提示需要登录，请先到「教务」完成学校门户登录。",
                     9.5f, Ui.TEXT_FAINT), topMargin(8));
-            page.addView(intro, topMargin(14));
+            return card;
+        }
+        card.setClickable(true);
+        card.setOnClickListener(v -> showHoursSheet());
+        LinearLayout row = Ui.row(this);
+        LinearLayout left = Ui.column(this);
+        left.addView(Ui.bold(this, formatHoursShort(hoursData.total()) + " 学时", 22, Ui.TEAL));
+        left.addView(Ui.text(this, "心理 " + formatHours(hoursData.psyTotal())
+                + " · 劳动 " + formatHours(hoursData.laborTotal())
+                + " · 创业 " + formatHours(hoursData.ieTotal()), 9.5f, Ui.TEXT_FAINT), topMargin(2));
+        row.addView(left, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        row.addView(Ui.text(this, "明细 ›", 11, Ui.ACCENT));
+        card.addView(row);
+        if (hoursLoading) {
+            card.addView(Ui.text(this, "正在刷新…", 9.5f, Ui.TEXT_FAINT), topMargin(4));
+        }
+        return card;
+    }
+
+    private View academicTile(String title, String status, boolean busy, int icon, Runnable action) {
+        LinearLayout card = Ui.glassCard(this, 18, 12, 10);
+        card.setClickable(true);
+        card.setFocusable(true);
+        card.setOnClickListener(v -> action.run());
+        LinearLayout row = Ui.row(this);
+        LinearLayout badge = Ui.column(this);
+        badge.setGravity(Gravity.CENTER);
+        badge.setBackground(Ui.round(0x66FFFFFF, 11, this));
+        badge.addView(new LineIconView(this, icon, Ui.ACCENT),
+                new LinearLayout.LayoutParams(dp(16), dp(16)));
+        row.addView(badge, new LinearLayout.LayoutParams(dp(30), dp(30)));
+        LinearLayout text = Ui.column(this);
+        text.setPadding(dp(8), 0, 0, 0);
+        text.addView(Ui.medium(this, title, 11.5f, Ui.TEXT));
+        TextView sub = Ui.text(this, status, 9f, busy ? Ui.ACCENT : Ui.TEXT_FAINT);
+        sub.setSingleLine(true);
+        sub.setEllipsize(TextUtils.TruncateAt.END);
+        text.addView(sub, topMargin(2));
+        row.addView(text, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        card.addView(row);
+        return card;
+    }
+
+    private String gradesStatusText() {
+        if (gradesLoading) return "正在读取…";
+        if (gradesError != null) return "读取失败 · 点开重试";
+        if (gradesJson == null || gradesJson.trim().isEmpty()) return "未读取 · 点开读取";
+        try {
+            JSONObject root = new JSONObject(gradesJson.trim());
+            JSONArray terms = root.optJSONArray("terms");
+            if (terms == null) return "已缓存";
+            int count = 0;
+            double credits = 0;
+            for (int i = 0; i < terms.length(); i++) {
+                JSONObject term = terms.getJSONObject(i);
+                JSONArray rows = term.optJSONArray("rows");
+                if (rows != null) count += rows.length();
+                credits += term.optDouble("credits", 0);
+            }
+            String text = terms.length() + " 学期 · " + count + " 门";
+            if (credits > 0) text += " · " + formatHours(credits) + " 学分";
+            return text;
+        } catch (Exception e) {
+            return "已缓存";
+        }
+    }
+
+    private String examsStatusText() {
+        if (examsLoading) return "正在读取…";
+        if (examsError != null) return "读取失败 · 点开重试";
+        if (examsJson == null || examsJson.trim().isEmpty()) return "未读取 · 点开读取";
+        try {
+            JSONObject root = new JSONObject(examsJson.trim());
+            JSONArray terms = root.optJSONArray("terms");
+            if (terms == null) return "已缓存";
+            int count = 0;
+            for (int i = 0; i < terms.length(); i++) {
+                JSONArray exams = terms.getJSONObject(i).optJSONArray("exams");
+                if (exams != null) count += exams.length();
+            }
+            return terms.length() + " 学期 · " + count + " 场";
+        } catch (Exception e) {
+            return "已缓存";
+        }
+    }
+
+    /** Only one sheet at a time: opening another closes the previous one. */
+    private void dismissSheets() {
+        if (gradesSheet != null && gradesSheet.isShowing()) gradesSheet.dismiss();
+        if (examsSheet != null && examsSheet.isShowing()) examsSheet.dismiss();
+        if (hoursSheet != null && hoursSheet.isShowing()) hoursSheet.dismiss();
+    }
+
+    private void showGradesSheet() {
+        if (gradesSheet != null && gradesSheet.isShowing()) return;
+        dismissSheets();
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        LinearLayout root = sheetRoot(dialog, "成绩", "全部学期 · 来自教务成绩查询");
+        ScrollView sv = new MaxHeightScrollView(this, dp(430));
+        LinearLayout body = Ui.column(this);
+        sv.addView(body, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        root.addView(sv, topMargin(6));
+        gradesSheet = dialog;
+        gradesSheetBody = body;
+        fillGradesSheet(body);
+        dialog.setOnDismissListener(d -> {
+            gradesSheet = null;
+            gradesSheetBody = null;
+        });
+        styleSheet(dialog, root);
+    }
+
+    private void fillGradesSheet(LinearLayout body) {
+        body.removeAllViews();
+        if (gradesLoading) {
+            body.addView(Ui.text(this, "正在从教务读取…", 11, Ui.TEXT_FAINT), topMargin(6));
             return;
         }
-
-        page.addView(hoursCard("心理活动学时", hoursData.psy, hoursData.psyTotal(),
-                0xFF7B5EA7, 0xFFF0E8FB), topMargin(14));
-        page.addView(hoursCard("劳动实践学时", hoursData.labor, hoursData.laborTotal(),
-                0xFF2E8B6B, 0xFFE1F3EA), topMargin(12));
-        page.addView(hoursCard("创新创业学时", hoursData.ie, hoursData.ieTotal(),
-                0xFFC07A2C, 0xFFFFEFDD), topMargin(12));
-
-        if (hoursLoading) {
-            page.addView(Ui.text(this, "正在刷新…", 10, Ui.TEXT_FAINT), topMargin(10));
+        if (gradesError != null) {
+            body.addView(Ui.text(this, gradesError, 11, Ui.TEXT_SOFT), topMargin(6));
+            TextView again = Ui.action(this, "重新读取", true);
+            again.setOnClickListener(v -> fetchGrades());
+            body.addView(again, topMargin(10));
+            return;
         }
-        TextView foot = Ui.text(this,
-                "数据来源：学校学工系统 · 仅在本机显示，不上传", 9.5f, Ui.TEXT_FAINT);
-        foot.setGravity(Gravity.CENTER);
-        page.addView(foot, topMargin(16));
+        String raw = gradesJson == null ? "" : gradesJson.trim();
+        if (raw.isEmpty()) {
+            body.addView(Ui.text(this, "还没有读取成绩。", 11, Ui.TEXT_SOFT), topMargin(6));
+            TextView now = Ui.action(this, "立即读取", true);
+            now.setOnClickListener(v -> fetchGrades());
+            body.addView(now, topMargin(10));
+            return;
+        }
+        if (raw.startsWith("{") && renderGradesByTerm(body, raw)) return;
+        renderGradesFlat(body, raw);
+    }
+
+    private void showExamsSheet() {
+        if (examsSheet != null && examsSheet.isShowing()) return;
+        dismissSheets();
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        LinearLayout root = sheetRoot(dialog, "考试", "全部学期 · 来自教务考试查询");
+        ScrollView sv = new MaxHeightScrollView(this, dp(430));
+        LinearLayout body = Ui.column(this);
+        sv.addView(body, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        root.addView(sv, topMargin(6));
+        examsSheet = dialog;
+        examsSheetBody = body;
+        fillExamsSheet(body);
+        dialog.setOnDismissListener(d -> {
+            examsSheet = null;
+            examsSheetBody = null;
+        });
+        styleSheet(dialog, root);
+    }
+
+    private void fillExamsSheet(LinearLayout body) {
+        body.removeAllViews();
+        if (examsLoading) {
+            body.addView(Ui.text(this, "正在从教务读取…", 11, Ui.TEXT_FAINT), topMargin(6));
+            return;
+        }
+        if (examsError != null) {
+            body.addView(Ui.text(this, examsError, 11, Ui.TEXT_SOFT), topMargin(6));
+            TextView again = Ui.action(this, "重新读取", true);
+            again.setOnClickListener(v -> fetchExams());
+            body.addView(again, topMargin(10));
+            return;
+        }
+        String raw = examsJson == null ? "" : examsJson.trim();
+        if (raw.isEmpty()) {
+            body.addView(Ui.text(this, "还没有读取考试安排。", 11, Ui.TEXT_SOFT), topMargin(6));
+            TextView now = Ui.action(this, "立即读取", true);
+            now.setOnClickListener(v -> fetchExams());
+            body.addView(now, topMargin(10));
+            return;
+        }
+        if (!renderExamsByTerm(body)) {
+            body.addView(Ui.text(this, "考试数据解析失败，请重新读取。", 11, Ui.TEXT_SOFT),
+                    topMargin(6));
+        }
+    }
+
+    private void showHoursSheet() {
+        if (hoursData == null) {
+            Toast.makeText(this, "还没有读取学时", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (hoursSheet != null && hoursSheet.isShowing()) return;
+        dismissSheets();
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        LinearLayout root = sheetRoot(dialog, "学时明细",
+                "心理 " + formatHours(hoursData.psyTotal())
+                        + " · 劳动 " + formatHours(hoursData.laborTotal())
+                        + " · 创业 " + formatHours(hoursData.ieTotal()));
+        ScrollView sv = new MaxHeightScrollView(this, dp(460));
+        LinearLayout body = Ui.column(this);
+        body.addView(hoursCard("心理活动学时", hoursData.psy, hoursData.psyTotal(),
+                0xFF7B5EA7, 0xFFF0E8FB), topMargin(10));
+        body.addView(hoursCard("劳动实践学时", hoursData.labor, hoursData.laborTotal(),
+                0xFF2E8B6B, 0xFFE1F3EA), topMargin(10));
+        body.addView(hoursCard("创新创业学时", hoursData.ie, hoursData.ieTotal(),
+                0xFFC07A2C, 0xFFFFEFDD), topMargin(10));
+        sv.addView(body, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        root.addView(sv);
+        hoursSheet = dialog;
+        dialog.setOnDismissListener(d -> hoursSheet = null);
+        styleSheet(dialog, root);
+    }
+
+    private LinearLayout sheetRoot(final Dialog dialog, String title, String subtitle) {
+        LinearLayout root = Ui.column(this);
+        root.setBackground(Ui.round(Ui.CARD, 22, this));
+        root.setClipToOutline(true);
+        root.setPadding(dp(20), dp(16), dp(20), dp(16));
+        LinearLayout head = Ui.row(this);
+        head.addView(Ui.bold(this, title, 18, Ui.TEXT));
+        head.addView(Ui.flexibleGap(this));
+        TextView close = Ui.ghost(this, "关闭", 12);
+        close.setOnClickListener(v -> dialog.dismiss());
+        head.addView(close);
+        root.addView(head);
+        if (subtitle != null && !subtitle.isEmpty()) {
+            root.addView(Ui.text(this, subtitle, 10.5f, Ui.TEXT_FAINT), topMargin(3));
+        }
+        return root;
+    }
+
+    private void styleSheet(Dialog dialog, LinearLayout root) {
+        dialog.setContentView(root);
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            window.setDimAmount(0.42f);
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            window.setGravity(Gravity.CENTER);
+            int width = Math.min(getResources().getDisplayMetrics().widthPixels - dp(36), dp(640));
+            window.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+        dialog.show();
     }
 
     private LinearLayout hoursCard(String title, List<HoursData.Item> items, double total,
@@ -2545,6 +3386,7 @@ public class MainActivity extends Activity {
 
     private void fetchHours() {
         if (hoursLoading) return;
+        cancelAcademicFetches();
         if (!xgxtCleartextOk()) {
             promptXgxtCleartext(this::fetchHours);
             return;
@@ -2569,6 +3411,27 @@ public class MainActivity extends Activity {
         hoursError = message;
         hoursRequestId++;
         renderStudy();
+    }
+
+    /** The shared WebView can only serve one background read; starting the next cancels the old. */
+    private void cancelHoursLoad() {
+        if (!hoursLoading) return;
+        hoursRequestId++;
+        hoursStage = 0;
+        hoursLoading = false;
+    }
+
+    private void cancelAcademicFetches() {
+        if (gradesLoading) {
+            gradeRequestId++;
+            gradeStage = 0;
+            gradesLoading = false;
+        }
+        if (examsLoading) {
+            examRequestId++;
+            examStage = 0;
+            examsLoading = false;
+        }
     }
 
     private void runHoursScript(final int attempt) {
@@ -2778,6 +3641,7 @@ public class MainActivity extends Activity {
                 data = candidate;
                 data.rawText = raw;
                 data.lastSync = stamp;
+                mergeExamsIntoData();
                 prefs.edit()
                         .putString("courseJson", obj.toString())
                         .putString("courseText", raw)
@@ -2992,6 +3856,18 @@ public class MainActivity extends Activity {
         else if (tab == TAB_HOME) renderHome();
         else if (tab == TAB_WEEK) renderWeek();
         else if (tab == TAB_LIFE) renderLife();
+        else if (tab == TAB_STUDY) renderStudy();
+        refreshAcademicSheets();
+    }
+
+    /** Keeps an open 成绩/考试 sheet live while a background read is running. */
+    private void refreshAcademicSheets() {
+        if (gradesSheet != null && gradesSheet.isShowing() && gradesSheetBody != null) {
+            fillGradesSheet(gradesSheetBody);
+        }
+        if (examsSheet != null && examsSheet.isShowing() && examsSheetBody != null) {
+            fillExamsSheet(examsSheetBody);
+        }
     }
 
     private void pickTermStart() {
@@ -3232,6 +4108,9 @@ public class MainActivity extends Activity {
         s.setAllowContentAccess(false);
         s.setSaveFormData(false);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        s.setSupportZoom(true);
+        s.setBuiltInZoomControls(true);
+        s.setDisplayZoomControls(false);
         s.setSupportMultipleWindows(true);
         s.setJavaScriptCanOpenWindowsAutomatically(false);
         s.setGeolocationEnabled(false);
@@ -3303,10 +4182,17 @@ public class MainActivity extends Activity {
                 || "10.9.20.13".equals(host));
     }
 
+    /** 学在广城（讯飞智课）托管在校外：只放行 HTTPS 的 fifedu.com 及其子域。 */
+    private boolean isXueHost(String host) {
+        if (host == null) return false;
+        String h = host.toLowerCase(Locale.US);
+        return h.equals("fifedu.com") || h.endsWith(".fifedu.com");
+    }
+
     private boolean allowed(String u) {
         Uri p = Uri.parse(u);
         return "https".equalsIgnoreCase(p.getScheme())
-                && isSchoolHost(p.getHost())
+                && (isSchoolHost(p.getHost()) || isXueHost(p.getHost()))
                 && (p.getPort() == -1 || p.getPort() == 443);
     }
 
@@ -3315,12 +4201,38 @@ public class MainActivity extends Activity {
         return "http".equalsIgnoreCase(p.getScheme()) && isSchoolHost(p.getHost());
     }
 
+    private static final String PREF_CLEARTEXT_HOSTS = "cleartextHosts";
+
+    /** HTTP approval is remembered per host: warn once, not on every visit. */
+    private boolean cleartextOkFor(String host) {
+        String h = host == null ? "" : host.toLowerCase(Locale.US);
+        if (h.isEmpty()) return false;
+        if (cleartextApproved.contains(h)) return true;
+        Set<String> saved = prefs.getStringSet(PREF_CLEARTEXT_HOSTS, null);
+        if (saved != null && saved.contains(h)) {
+            cleartextApproved.add(h);
+            return true;
+        }
+        return false;
+    }
+
+    private void approveCleartext(String host) {
+        String h = host == null ? "" : host.toLowerCase(Locale.US);
+        if (h.isEmpty()) return;
+        cleartextApproved.add(h);
+        Set<String> saved = new HashSet<String>();
+        Set<String> stored = prefs.getStringSet(PREF_CLEARTEXT_HOSTS, null);
+        if (stored != null) saved.addAll(stored);
+        saved.add(h);
+        prefs.edit().putStringSet(PREF_CLEARTEXT_HOSTS, saved).apply();
+    }
+
     /** School HTTP links are loaded in place after explicit consent; URLs are never rewritten. */
     private void loadTarget(String url) {
         if (isSchoolHttp(url)) {
             Uri p = Uri.parse(url);
             String host = p.getHost() == null ? "" : p.getHost().toLowerCase(Locale.US);
-            if (cleartextApproved.contains(host)) {
+            if (cleartextOkFor(host)) {
                 browserState.setText("该学校服务使用 HTTP 明文连接，请勿输入重要密码。");
                 web.loadUrl(url);
                 return;
@@ -3341,7 +4253,7 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this)
                 .setTitle("学校服务使用 HTTP")
                 .setMessage(host + " 只提供 HTTP 明文连接，登录信息可能被同网段监听。\n\n"
-                        + "是否继续访问？仅本次会话会对该域名放行。")
+                        + "是否继续访问？确认后本机不再重复提示，可在「设置 → 清除数据」里重置。")
                 .setNegativeButton("取消", (d, w) -> {
                     cleartextPromptShowing = false;
                     browserState.setText("已取消加载 HTTP 页面。");
@@ -3349,7 +4261,7 @@ public class MainActivity extends Activity {
                 })
                 .setPositiveButton("继续访问", (d, w) -> {
                     cleartextPromptShowing = false;
-                    cleartextApproved.add(host.toLowerCase(Locale.US));
+                    approveCleartext(host);
                     browserState.setText("该页面使用 HTTP 明文连接，请勿输入重要密码。");
                     web.loadUrl(url);
                 })
@@ -3436,7 +4348,7 @@ public class MainActivity extends Activity {
     }
 
     private boolean xgxtCleartextOk() {
-        return cleartextApproved.contains("xgxt.gcp.edu.cn")
+        return cleartextOkFor("xgxt.gcp.edu.cn")
                 || prefs.getBoolean("studentCleartextOk", false);
     }
 
@@ -3450,7 +4362,7 @@ public class MainActivity extends Activity {
                 .setMessage("学校学工移动端只提供 HTTP 明文连接，登录信息可能被同网段监听。\n\n"
                         + "是否继续？确认后本机不再重复提示，可在设置里清除。")
                 .setPositiveButton("继续访问", (d, w) -> {
-                    cleartextApproved.add("xgxt.gcp.edu.cn");
+                    approveCleartext("xgxt.gcp.edu.cn");
                     prefs.edit().putBoolean("studentCleartextOk", true).apply();
                     onOk.run();
                 })
@@ -3471,7 +4383,8 @@ public class MainActivity extends Activity {
         if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
             browserState.setText("已拦截非网页链接（" + scheme + "），不会自动打开外部应用。");
         } else {
-            browserState.setText("已拦截校外跳转：" + target + "。本应用只允许学校域名（*.gcp.edu.cn）。");
+            browserState.setText("已拦截校外跳转：" + target
+                    + "。本应用只允许学校域名（*.gcp.edu.cn）与学在广城（*.fifedu.com）。");
         }
         android.util.Log.w("GCT", "blocked " + target);
     }
@@ -3495,7 +4408,7 @@ public class MainActivity extends Activity {
                 if (isSchoolHttp(target)) {
                     Uri p = Uri.parse(target);
                     String host = p.getHost() == null ? "" : p.getHost().toLowerCase(Locale.US);
-                    if (cleartextApproved.contains(host)) return false;
+                    if (cleartextOkFor(host)) return false;
                     loadTarget(target);
                     return true;
                 }
@@ -3514,7 +4427,7 @@ public class MainActivity extends Activity {
                 if ("http".equalsIgnoreCase(u.getScheme())) {
                     if (isSchoolHost(u.getHost())) {
                         String host = u.getHost().toLowerCase(Locale.US);
-                        if (!cleartextApproved.contains(host)) {
+                        if (!cleartextOkFor(host)) {
                             web.stopLoading();
                             loadTarget(url);
                             return;
@@ -3561,8 +4474,33 @@ public class MainActivity extends Activity {
                         && (path.startsWith("/cashier-mobile") || path.startsWith("/wechat"))) {
                     web.postDelayed(MainActivity.this::prefillOneCardCredentials, 1200);
                 }
+                if (oneCardBill && "zffw.gcp.edu.cn".equals(host)) {
+                    web.postDelayed(MainActivity.this::runBillScript, 1200);
+                }
                 if ("auth.gcp.edu.cn".equals(host) || "jwcjw.gcp.edu.cn".equals(host)) {
                     web.postDelayed(MainActivity.this::prefillSchoolCredentials, 1200);
+                }
+                if (gradeStage > 0 && "jwcjw.gcp.edu.cn".equals(host)) {
+                    if (path.contains("cjcx")) {
+                        gradeStage = 2;
+                        web.postDelayed(MainActivity.this::runGradesScript, 500);
+                        return;
+                    }
+                    if (path.contains("login")) {
+                        failGrades("需要先登录教务：在页面完成登录后，再点一次「成绩查询」。");
+                        return;
+                    }
+                }
+                if (examStage > 0 && "jwcjw.gcp.edu.cn".equals(host)) {
+                    if (path.contains("kscx")) {
+                        examStage = 2;
+                        web.postDelayed(MainActivity.this::runExamsScript, 500);
+                        return;
+                    }
+                    if (path.contains("login")) {
+                        failExams("需要先登录教务：在页面完成登录后，再点一次「考试安排」。");
+                        return;
+                    }
                 }
 
                 if (syncStage > 0) {
@@ -3638,19 +4576,13 @@ public class MainActivity extends Activity {
                     browserState.setText("已进入教务。可自行浏览，或用上方「进入课表」打开个人课表查询。");
                 } else if ("home.gcp.edu.cn".equals(host)) {
                     browserState.setText("门户已打开。请自行点击学校入口；只有点「读取课表」才会读取。");
+                } else if (isXueHost(host)) {
+                    browserState.setText("已进入学在广城（讯飞智课）；登录使用 FIF 账号或微信。");
+                } else if (allowed(url)) {
+                    browserState.setText("页面已加载。");
                 }
             }
         };
-    }
-
-    private String extractionScript() throws Exception {
-        try (InputStream input = getAssets().open("extract-course.js");
-             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-            byte[] buffer = new byte[4096];
-            int n;
-            while ((n = input.read(buffer)) != -1) output.write(buffer, 0, n);
-            return output.toString("UTF-8");
-        }
     }
 
     private boolean extracting;
@@ -3668,7 +4600,7 @@ public class MainActivity extends Activity {
         final int g = pageGeneration;
         String script;
         try {
-            script = extractionScript();
+            script = readAsset("extract-course.js");
         } catch (Exception ex) {
             browserState.setText("课表适配资源无法读取，未修改本地课表。");
             return;
@@ -3746,6 +4678,7 @@ public class MainActivity extends Activity {
         data = candidate;
         data.rawText = rawText;
         data.lastSync = stamp;
+        mergeExamsIntoData();
         SharedPreferences.Editor editor = prefs.edit();
         editor.putString("courseJson", json);
         editor.putString("courseText", rawText);
@@ -3794,6 +4727,7 @@ public class MainActivity extends Activity {
         oneCardUser = "";
         oneCardCapture = false;
         oneCardReturnToLife = false;
+        oneCardBill = false;
         oneCardUser = "";
         prefillOneCard = false;
         try {

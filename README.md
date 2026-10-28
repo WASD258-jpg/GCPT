@@ -30,11 +30,15 @@
 
 ## 界面
 
-> 以下为 MuMu 模拟器竖屏截图，课程、教师、教室、余额均为虚构示例，不含真实个人信息。
+> 以下为 MuMu 模拟器 1080×2400 竖屏截图；课程、教师、教室、余额、成绩与考试均为虚构示例，不含真实个人信息。
 
-| 首页 | 课表 |
+| 首页 | 课表（周览） |
 | :---: | :---: |
 | ![首页](docs/screenshots/home.png) | ![课表](docs/screenshots/schedule.png) |
+| **学业** | **成绩（全部学期）** |
+| ![学业](docs/screenshots/study.png) | ![成绩](docs/screenshots/grades.png) |
+| **考试安排** | **生活** |
+| ![考试](docs/screenshots/exams.png) | ![生活](docs/screenshots/life.png) |
 | **设置** |  |
 | ![设置](docs/screenshots/settings.png) |  |
 
@@ -42,11 +46,12 @@
 
 - 📅 **课表**：教学周切换、单日 11 节时间轨道、周览、课程详情、教师显隐、调课/重叠提示。
 - 🏠 **首页**：今日课程、本周概览、学时/余额、待确认事项和校园入口聚合。
-- 🎓 **学业/学工**：从学校登录态读取学时；学工移动端 HTTP 需明确确认。
-- 💳 **校园卡**：一卡通电子账户余额同步，凭证用 Android Keystore AES-GCM 加密，验证码手动。
+- 🎓 **学业**：学时、成绩、考试都是「概览 + 明细」——学时卡看总量与三类小计，成绩/考试是贴片（如「3 学期 · 12 门 · 28.5 学分」），点开才是分学期明细。读取在后台完成，点「同步」即可刷新，不跳浏览器；考试会按日期与时段自动进课表。学工移动端 HTTP 需确认一次。
+- 💳 **校园卡**：一卡通电子账户余额同步与「交易明细」（自动进入账单流水），凭证用 Android Keystore AES-GCM 加密，验证码手动。
 - 🚿 **热水**：从稳定入口 `mh60.gcp.edu.cn` 解析当前微信小程序 `url_scheme`，直接拉起微信。
 - 📚 **图书馆**：馆藏检索、借阅/续借 OPAC、本地电子证亮码与导入说明。
 - 🏫 **校园服务**：学校门户、教务系统、办事大厅、网上医务室，门户与教务分开。
+- 📘 **学在广城**：讯飞智课平台 `gcpzk.fifedu.com/homePage`（FIF 账号登录），与「一体化平台」`study.gcp.edu.cn`（学校统一登录免登录）分开；两个站点是桌面版式，按原尺寸显示（可双指放大）。首页 / 生活页 / 侧栏都有入口。
 - 🛠️ **宿舍报修**：后勤报修 lms.gcp.edu.cn，走学校统一登录，报修宿舍水电 / 门窗等问题。
 - 🎨 **设计**：晨雾渐变、玻璃面板、手绘线性图标、页面 280ms 过渡、四页底部导航。
 - 🔐 **本地优先**：无账号、无服务器、无统计、无广告、无崩溃上报；`allowBackup=false`。
@@ -55,13 +60,13 @@
 
 从 [Releases](https://github.com/WASD258-jpg/GCPT/releases/latest) 下载：
 
-- 当前版本：**1.0.3**（versionCode 1003）
-- 文件：`gcpt-1.0.3.apk`
+- 当前版本：**1.1**（versionCode 1100）
+- 文件：`gcpt-1.1.apk`
 - 包名：`cn.gcpt.app`
 - 系统：Android 8.0（API 26）及以上
-- SHA-256：`CB06B59B1A207C15C391445D564ABDE751AB14D22904404EA69DACB80EF243CC`
+- SHA-256：`73DEB25F655B663A5B9DFA9ACB312044111BD43C02C4ED4DE62CD2190297234A`
 
-> 1.0.3 使用新包名 `cn.gcpt.app`，是独立应用；旧 1.0.1（`cn.gct.demo`）的数据不会自动迁移，请重新登录 / 导入。正式签名证书 SHA-256：`8d4699d2c69f1771695804fa4fb8a5adaa88001054c0ef7c0ccbf42d084c25a3`。
+> 1.0.3 起使用新包名 `cn.gcpt.app`，是独立应用；旧 1.0.1（`cn.gct.demo`）的数据不会自动迁移，请重新登录 / 导入。正式签名证书 SHA-256：`8d4699d2c69f1771695804fa4fb8a5adaa88001054c0ef7c0ccbf42d084c25a3`。
 
 ## 构建
 
@@ -80,7 +85,7 @@ pwsh -File .\build-demo.ps1
 
 ```text
 src/cn/gcpt/app/      Java 源码（单 Activity、无第三方 UI 库）
-assets/               WebView 注入的校历/课表/学时脚本
+assets/               WebView 注入的校历/课表/学时/成绩/考试脚本
 res/                  自适应图标、网络配置、主题
 docs/                 架构、构建
 build-demo.ps1        手动构建与签名脚本
@@ -91,7 +96,7 @@ AndroidManifest.xml   清单（仅 INTERNET，allowBackup=false）
 
 - 不收集、不上传、不运营服务器；没有账号、注册、统计、广告或崩溃上报。
 - 密码用 Android Keystore AES-GCM 加密；账号、课表、余额保存在应用私有目录。
-- WebView 只允许学校域名与必要的图书馆/OPAC 例外；未开启 JavaScript 原生桥；SSL 错误直接取消。
+- WebView 只允许学校域名 `*.gcp.edu.cn`，外加图书馆/OPAC 例外与「学在广城」所需的 `*.fifedu.com`（仅 HTTPS，主框架导航）；未开启 JavaScript 原生桥；SSL 错误直接取消。
 - 凭证预填只对 `https://auth.gcp.edu.cn` 等明确页面生效，验证码始终手动。
 - 已知风险、已修项和正式版签名说明见 [SECURITY.md](SECURITY.md)。
 

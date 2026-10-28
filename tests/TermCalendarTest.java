@@ -1,4 +1,4 @@
-import cn.gct.demo.TermCalendar;
+import cn.gcpt.app.TermCalendar;
 import java.time.LocalDate;
 
 public class TermCalendarTest {

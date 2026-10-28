@@ -111,6 +111,9 @@ public final class CourseData {
         });
         StringBuilder b = new StringBuilder();
         for (CourseParser.Course c : sorted) {
+            // Exam entries are rebuilt from examsJson on every render; keeping them out of the
+            // fingerprint stops the daily auto-sync from reporting phantom changes.
+            if (c.name != null && c.name.startsWith("【考试】")) continue;
             b.append(c.day).append('|').append(c.start).append('|').append(c.end).append('|')
                     .append(c.name).append('|').append(c.weeks).append('|')
                     .append(c.room).append('|').append(c.teacher).append('|')

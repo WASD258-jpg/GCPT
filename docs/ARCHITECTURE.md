@@ -61,6 +61,14 @@ MainActivity
 - 后台自动同步在用户浏览门户时跳过；
 - 一卡通从生活页发起登录，完成后回生活页；若中途切到其它页则不抢页面。
 
+## 教务查询（成绩 / 考试）
+
+- 成绩：`assets/extract-grades.js` 在成绩页上下文里 `POST /jwglxt/cjcx/cjcx_cxXsgrcj.html?doType=query`，学年与学期留空即返回全部学期；页面侧按 `xnm/xqm` 分组、算学分与加权绩点后写入 `window.__gcptGrades`，`MainActivity.pollGrades()` 轮询该变量存入 `gradesJson`。
+- 考试：`assets/extract-exams.js` 同理调用 `/jwglxt/kwgl/kscx_cxXsksxxIndex.html?doType=query`，结果写入 `window.__gcptExams`。
+- 正方成绩页默认只显示「请选择筛选条件!」，抓 `#tabGrid` 永远拿不到数据，所以改为走页面自身的查询接口。
+- `evaluateJavascript()` 不会 await Promise，所以是「页面写全局变量 + App 轮询」，而不是同步返回。
+- 考试会合并进课表（`【考试】` 前缀），日期换算教学周、时间换算 1–11 节；考试条目不计入课表指纹，避免每日自动同步误判为「课表有变化」。
+
 ## 已知风险
 
 - 学工接口仍为学校 HTTP + 服务端 Basic 凭证（F1，已接受风险）；

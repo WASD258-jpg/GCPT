@@ -1,4 +1,4 @@
-import cn.gct.demo.CourseParser;
+import cn.gcpt.app.CourseParser;
 import java.util.*;
 public class CourseParserTest {
     static int passed=0;
